@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:wicket="http://wicket.sourceforge.net/">
+<body>
+
+<wicket:extend>
+
+    <div>
+        <form wicket:id="form" style="margin-top: 0px;">
+            <table class="edittable">
+                <thead>
+                    <tr>
+                        <td class="edittable-header" colspan="2">
+                            Upload Certificates
+                        </td>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="trow-title">
+                            Certificate
+                        </td>
+                        <td class="trow-body">
+                            <textarea wicket:id="certificate" rows="20" cols="20" wrap="hard" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="trow-title">
+                            Private Key
+                        </td>
+                        <td class="trow-body">
+                            <textarea wicket:id="privateKey" rows="20" cols="20" wrap="hard" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="trow-title">
+                            Submit
+                        </td>
+                        <td class="trow-body">
+                            <input class="savebtn" type="submit" style="display: inline-block; padding-top: 4px; padding-bottom: 6px; margin-left: 2px;" wicket:message="value:API.Variable.SaveButton"/>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </form>
+    </div>
+
+</wicket:extend>
+
+</body>
+</html>

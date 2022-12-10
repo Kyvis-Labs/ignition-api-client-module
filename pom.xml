@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.kyvislabs.api.client</groupId>
+    <artifactId>api-client</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>api-client-build</module>
+        <module>api-client-client</module>
+        <module>api-client-common</module>
+        <module>api-client-designer</module>
+        <module>api-client-gateway</module>
+    </modules>
+
+    <properties>
+        <ignition-platform-version>8.1.0</ignition-platform-version>
+        <ignition-sdk-version>8.1.10</ignition-sdk-version>
+        <module-name>API Client Module</module-name>
+        <module-description>The module provides a framework to call 3rd party REST APIs</module-description>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <timestamp>${maven.build.timestamp}</timestamp>
+        <maven.build.timestamp.format>yyyyMMddHH</maven.build.timestamp.format>
+    </properties>
+
+    <pluginRepositories>
+        <pluginRepository>
+            <id>releases</id>
+            <url>https://nexus.inductiveautomation.com/repository/inductiveautomation-releases</url>
+            <releases>
+                <enabled>true</enabled>
+                <updatePolicy>always</updatePolicy>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </pluginRepository>
+    </pluginRepositories>
+
+    <repositories>
+        <repository>
+            <id>releases</id>
+            <url>https://nexus.inductiveautomation.com/repository/inductiveautomation-releases</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+            <releases>
+                <enabled>true</enabled>
+                <updatePolicy>always</updatePolicy>
+            </releases>
+        </repository>
+
+        <repository>
+            <id>snapshots</id>
+            <url>https://nexus.inductiveautomation.com/repository/inductiveautomation-snapshots</url>
+            <snapshots>
+                <enabled>true</enabled>
+                <updatePolicy>always</updatePolicy>
+            </snapshots>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+        </repository>
+
+        <repository>
+            <id>thirdparty</id>
+            <url>https://nexus.inductiveautomation.com/repository/inductiveautomation-thirdparty</url>
+            <releases>
+                <enabled>true</enabled>
+                <updatePolicy>always</updatePolicy>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+</project>

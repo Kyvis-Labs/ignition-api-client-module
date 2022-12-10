@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:wicket="http://wicket.sourceforge.net/">
+<body>
+
+<wicket:extend>
+
+    <div>
+
+        <form wicket:id="form">
+
+            <table class="edittable" cellpadding="0" cellspacing="0" wicket:id="userVariables">
+                <thead>
+                <tr>
+                    <td colspan="2">
+                        User Variables
+                    </td>
+                </tr>
+                </thead>
+
+                <tbody>
+                <tr wicket:id="listview">
+                    <td class="trow-title">
+                        <span wicket:id="key"></span>
+                    </td>
+                    <td class="trow-body">
+                        <input wicket:id="valueText" type="text" style="width:100%" />
+                        <input type="checkbox" wicket:id="passwordCheck" style="float: left; margin-top: 8px; margin-right: 5px" title="Change Variable" />
+                        <input wicket:id="valuePassword" type="password" style="width:98%" />
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+
+            <table class="edittable" cellpadding="0" cellspacing="0" wicket:id="apiVariables">
+                <thead>
+                <tr>
+                    <td colspan="2">
+                        API Variables
+                    </td>
+                </tr>
+                </thead>
+
+                <tbody>
+                <tr wicket:id="listview">
+                    <td class="trow-title">
+                        <span wicket:id="key"></span>
+                    </td>
+                    <td class="trow-body">
+                        <span wicket:id="valueLabel"></span>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+
+            <input class="savebtn" type="submit" wicket:message="value:API.Variable.SaveButton"/>
+        </form>
+
+    </div>
+
+</wicket:extend>
+
+</body>
+</html>

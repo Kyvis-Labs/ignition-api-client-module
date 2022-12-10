@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <artifactId>api-client</artifactId>
+		<groupId>com.kyvislabs.api.client</groupId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>api-client-build</artifactId>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.kyvislabs.api.client</groupId>
+            <artifactId>api-client-client</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.kyvislabs.api.client</groupId>
+            <artifactId>api-client-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.kyvislabs.api.client</groupId>
+            <artifactId>api-client-designer</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.kyvislabs.api.client</groupId>
+            <artifactId>api-client-gateway</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>com.inductiveautomation.ignitionsdk</groupId>
+                <artifactId>ignition-maven-plugin</artifactId>
+                <version>1.1.0</version>
+
+                <executions>
+                    <execution>
+                        <id>package-modl</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>modl</goal>
+                        </goals>
+                    </execution>
+                </executions>
+
+                <configuration>
+                    <projectScopes>
+                        <projectScope>
+                            <name>api-client-client</name>
+                            <scope>C</scope>
+                        </projectScope>
+                        <projectScope>
+                            <name>api-client-common</name>
+                            <scope>CDG</scope>
+                        </projectScope>
+                        <projectScope>
+                            <name>api-client-designer</name>
+                            <scope>CD</scope>
+                        </projectScope>
+                        <projectScope>
+                            <name>api-client-gateway</name>
+                            <scope>G</scope>
+                        </projectScope>
+                    </projectScopes>
+
+                    <moduleId>com.kyvislabs.api.client</moduleId>
+                    <moduleName>${module-name}</moduleName>
+                    <moduleDescription>${module-description}</moduleDescription>
+                    <moduleVersion>${project.version}.${timestamp}</moduleVersion>
+                    <requiredIgnitionVersion>${ignition-platform-version}</requiredIgnitionVersion>
+                    <requiredFrameworkVersion>8</requiredFrameworkVersion>
+                    <licenseFile>license.html</licenseFile>
+
+                    <hooks>
+                        <hook>
+                            <scope>C</scope>
+                            <hookClass>com.kyvislabs.api.client.client.ClientHook</hookClass>
+                        </hook>
+                        <hook>
+                            <scope>D</scope>
+                            <hookClass>com.kyvislabs.api.client.designer.DesignerHook</hookClass>
+                        </hook>
+                        <hook>
+                            <scope>G</scope>
+                            <hookClass>com.kyvislabs.api.client.gateway.GatewayHook</hookClass>
+                        </hook>
+                    </hooks>
+
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

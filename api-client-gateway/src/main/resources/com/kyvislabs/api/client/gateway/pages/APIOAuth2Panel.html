@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:wicket="http://wicket.sourceforge.net/">
+<body>
+
+<wicket:extend>
+
+    <div>
+
+        <table class="edittable">
+            <thead>
+                <tr>
+                    <td class="edittable-header" colspan="2">
+                        OAuth2 Authorization
+                    </td>
+                </tr>
+            </thead>
+            <tbody>
+                <tr wicket:id="redirectURL">
+                    <td class="trow-title">
+                        OAuth2 Redirect URL
+                    </td>
+                    <td class="trow-body">
+                        <span wicket:id="oauth2-redirect-url"></span>
+                    </td>
+                </tr>
+                <tr wicket:id="authLink">
+                    <td class="trow-title">
+                        OAuth2 Authorize Link
+                    </td>
+                    <td class="trow-body">
+                        <a wicket:id="oauth2-authorize">Click to authorize this API</a>
+                        <form wicket:id="form" style="margin-top: 0px;">
+                            <input class="savebtn" type="submit" style="display: inline-block; padding-top: 4px; padding-bottom: 6px; margin-left: 2px;" value="Click to authorize this API" />
+                        </form>
+                    </td>
+                </tr>
+                <tr wicket:id="captcha">
+                    <td class="trow-title">
+                        OAuth2 Captcha
+                    </td>
+                    <td class="trow-body">
+                        <form wicket:id="form" style="margin-top: 0px;">
+                            <img wicket:id="captchaImage" /><br />
+                            <input wicket:id="captchaCode" type="text" style="display: inline-block;" />
+                            <input class="savebtn" type="submit" style="display: inline-block; padding-top: 4px; padding-bottom: 6px; margin-left: 2px;" wicket:message="value:API.Variable.SaveButton"/>
+                        </form>
+                    </td>
+                </tr>
+                <tr wicket:id="twoFactor">
+                    <td class="trow-title">
+                        OAuth2 2FA Code
+                    </td>
+                    <td class="trow-body">
+                        <form wicket:id="form" style="margin-top: 0px;">
+                            <input wicket:id="twoFactorCode" type="text" style="display: inline-block;" />
+                            <input class="savebtn" type="submit" style="display: inline-block; padding-top: 4px; padding-bottom: 6px; margin-left: 2px;" wicket:message="value:API.Variable.SaveButton"/>
+                        </form>
+                    </td>
+                </tr>
+                <tr wicket:id="twoFactorReset">
+                    <td class="trow-title">
+                        OAuth2 2FA Reset
+                    </td>
+                    <td class="trow-body">
+                        <form wicket:id="form" style="margin-top: 0px;">
+                            <input class="savebtn" type="submit" style="display: inline-block; padding-top: 4px; padding-bottom: 6px; margin-left: 2px;" wicket:message="value:API.Variable.ResetButton"/>
+                        </form>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+    </div>
+
+</wicket:extend>
+
+</body>
+</html>
