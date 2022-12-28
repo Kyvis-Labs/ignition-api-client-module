@@ -93,16 +93,16 @@ The variables section is optional. Leaving the section out results in no variabl
 
 ### Variable Substitution
 
-Variables can be substituted in most parameters throughout the configuration. The parameter below will indicate if variables can be used. You can substitute variables by defining the variable you want to use wrapped in $. For example, if you have a variable called *baseUrl* you can use it when defining the URL of the endpoint:
+Variables can be substituted in most parameters throughout the configuration. The parameter below will indicate if variables can be used. You can substitute variables by defining the variable you want using the syntax {{var::*variable*}}. For example, if you have a variable called *baseUrl* you can use it when defining the URL of the endpoint:
 
 ```yaml
-url: $baseUrl$/api/auth/login
+url: {{var::baseUrl}}/api/auth/login
 ```
 
 Variables can also come from other variable stores, such as variables stored from other functions or tag write handlers. In those cases, you specify the variable store using a dot notation. For example, you can grab a variable from a function that is a dependency like this:
 
 ```yaml
-url: $baseUrl$/person/$personInfo.id$
+url: {{var::baseUrl}}/person/{{var::personInfo.id}}
 ```
 
 In the above example, *personInfo* is another function that gets called first before *person* and stores a variable called *id*, which is the person's identifier. 
@@ -176,7 +176,7 @@ Each type has its own set of parameters. See the types below for more details.
 ```yaml
 authType: 
   type: session
-  url: $baseUrl$/api/auth/login
+  url: {{var::baseUrl}}/api/auth/login
   params:
     - name: remember
       value: true
@@ -325,18 +325,18 @@ You can provide multiple webhooks. Each webhook is unique by the name you provid
 webhooks:
   device:
     check:
-      url: $baseUrl$/notification/webhook/$webhook.id$
+      url: {{var::baseUrl}}/notification/webhook/{{var::webhook.id}}
       method: get
     add:
       depends: person
-      url: $baseUrl$/notification/webhook
+      url: {{var::baseUrl}}/notification/webhook
       method: post
       body:
         type: json
         value: |
           {"device":
-            {"id":"$person.deviceId$"}, 
-            "url":"$webhook.url$",
+            {"id":"{{var::person.deviceId}}"}, 
+            "url":"{{var::webhook.url}}",
             "eventTypes":[{"id":"5"}]
           }
       actions:
@@ -345,13 +345,13 @@ webhooks:
           jsonPath: $.id
     remove:
       depends: person
-      url: $baseUrl$/notification/webhook/$webhook.id$
+      url: {{var::baseUrl}}/notification/webhook/{{var::webhook.id}}
       method: delete
     handle:
       responseType: json
       actions:
         - action: tag
-          path: $apiName$/data/webhooks/$webhook.name$
+          path: {{var::apiName}}/data/webhooks/{{var::webhook.name}}
           type: jsonExpand
 ```
 
@@ -391,7 +391,7 @@ You can provide multiple functions. Each function is unique by the name you prov
 ```yaml
 functions:
   personInfo:
-    url: $baseUrl$/person/info
+    url: {{var::baseUrl}}/person/info
     method: get
     responseType: json
     actions:
@@ -467,8 +467,8 @@ The value of the body as any string. You will need to specify the content type f
 ```yaml
 value: |
   {"device":
-    {"id":"$person.deviceId$"}, 
-    "url":"$webhook.url$",
+    {"id":"{{var::person.deviceId}}"}, 
+    "url":"{{var::webhook.url}}",
     "eventTypes":[{"id":"10"}]
   }
 ```
@@ -522,7 +522,7 @@ Defines a variable action that stores response data to variables on the function
 ```yaml
 functions:
   personInfo:
-    url: $baseUrl$/person/info
+    url: {{var::baseUrl}}/person/info
     method: get
     responseType: json
     actions:
@@ -531,16 +531,16 @@ functions:
         jsonPath: $.id
   person:
     depends: personInfo
-    url: $baseUrl$/person/$personInfo.id$
+    url: {{var::baseUrl}}/person/{{var::personInfo.id}}
     method: get
     responseType: json
     actions:
       - action: tag
-        path: $apiName$/data/person
+        path: {{var::apiName}}/data/person
         type: jsonExpand
 ```
 
-When you call the *person* function, the *personInfo* function gets called first since it depends on it. The *personInfo* function stores the id from the result as a variable called *id*. The *id* is used in the *person* function in the URL, by specifying where the variable comes from (variable store called *personInfo*): `$baseUrl$/person/$personInfo.id$`
+When you call the *person* function, the *personInfo* function gets called first since it depends on it. The *personInfo* function stores the id from the result as a variable called *id*. The *id* is used in the *person* function in the URL, by specifying where the variable comes from (variable store called *personInfo*): `{{var::baseUrl}}/person/{{var::personInfo.id}}`
 
 A variable can either get its value by specifying the value as a string, reading the value of an Ignition tag, or getting a value from the response data.
 
@@ -567,7 +567,7 @@ Defines a tag action that stores response data to tags in Ignition. The API Clie
 ```yaml
 actions:
   - action: tag
-    path: $apiName$/clients
+    path: {{var::apiName}}/clients
     type: jsonExpand
 ```
 
@@ -633,7 +633,7 @@ ___
 Allows you to invoke the function multiple times with all of the paths found in the JSON response. Perfect for calling the function on multiple devices that are returned. Variables defined with a JSON path will be appended to this JSON path, allowing you to get specific data out of each section. Leave out if you only want to invoke the function once. See [JSON Path](#json-path) for more details.
 ___
 **variables** list of [variable](#actionvariable) *(required)*
-The list of variables you want to store on the handler. You can use these variables in the function with the store called *handler*: `$handler.id$`
+The list of variables you want to store on the handler. You can use these variables in the function with the store called *handler*: `{{var::handler.id}}`
 
 ## tag (action)<span id="actiontag"><span>
 
@@ -706,7 +706,7 @@ Here is an example of UDT definition:
 ```yaml
 udts:
   - id: zone
-    path: $apiName$/zone
+    path: {{var::apiName}}/zone
     jsonPath: $.devices[*].zones[*]
     name: $.name
 ```
@@ -766,7 +766,7 @@ ___
 Automatically resets the tag's value back to false. Used for boolean tags where you want to invoke the handler on the rising edge only.
 ___
 **variables** list of [variable](#actionvariable) *(required)*
-The list of variables you want to store on the handler. You can use these variables in the function with the store called *handler*: `$handler.id$`
+The list of variables you want to store on the handler. You can use these variables in the function with the store called *handler*: `{{var::handler.id}}`
 
 # JSON Path
 
