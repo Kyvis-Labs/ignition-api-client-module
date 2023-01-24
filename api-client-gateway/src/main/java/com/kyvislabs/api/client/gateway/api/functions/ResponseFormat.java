@@ -35,7 +35,7 @@ public class ResponseFormat implements YamlParser {
         this.type = ResponseFormatType.NONE;
 
         if (yamlMap.containsKey("reponseFormat")) {
-            Map responseFormatMap = (Map) yamlMap.get("reponseFormat");
+            Map responseFormatMap = (Map) yamlMap.get("responseFormat");
             this.value = ValueString.parseValueString(function.getApi(), responseFormatMap, "value", true);
             this.type = ResponseFormatType.valueOf(responseFormatMap.getOrDefault("type", "none").toString().toUpperCase());
         }

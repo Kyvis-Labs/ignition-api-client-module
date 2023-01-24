@@ -40,7 +40,7 @@ public class Case implements YamlParser {
         }
 
         this.conditionKey = ValueString.parseValueString(function.getApi(), yamlMap, "conditionKey", true);
-        this.conditionOperator = ConditionOperator.valueOf(yamlMap.get("conditionOperator").toString().toUpperCase());
+        this.conditionOperator = ConditionOperator.valueOf(yamlMap.getOrDefault("conditionOperator", "EQ").toString().toUpperCase());
         this.conditionValue = ValueString.parseValueString(function.getApi(), yamlMap, "conditionValue", true);
         this.variables = parseVariables(yamlMap, function);
     }
@@ -89,7 +89,7 @@ public class Case implements YamlParser {
             throw new APIException("Variable '" + name + "' doesn't exist");
         }
 
-        return variables.get("name");
+        return variables.get(name);
     }
 
     public boolean matches(VariableStore store, String response) throws APIException {
@@ -121,9 +121,9 @@ public class Case implements YamlParser {
                 return Double.valueOf(conditionKey) < Double.valueOf(conditionValue);
             } else if (getConditionOperator().equals(Case.ConditionOperator.LTE)) {
                 return Double.valueOf(conditionKey) <= Double.valueOf(conditionValue);
-            } else if (getConditionOperator().equals(Case.ConditionOperator.MT)) {
+            } else if (getConditionOperator().equals(Case.ConditionOperator.GT)) {
                 return Double.valueOf(conditionKey) > Double.valueOf(conditionValue);
-            } else if (getConditionOperator().equals(Case.ConditionOperator.MTE)) {
+            } else if (getConditionOperator().equals(Case.ConditionOperator.GTE)) {
                 return Double.valueOf(conditionKey) >= Double.valueOf(conditionValue);
             }
         }
@@ -134,9 +134,9 @@ public class Case implements YamlParser {
     public enum ConditionOperator {
         EQ,
         LT,
-        MT,
+        GT,
         LTE,
-        MTE,
+        GTE,
         IN,
         NEQ
     }

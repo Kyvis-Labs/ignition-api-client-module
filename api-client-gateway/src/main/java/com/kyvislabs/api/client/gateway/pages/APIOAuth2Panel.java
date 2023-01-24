@@ -28,7 +28,8 @@ public class APIOAuth2Panel extends ConfigPanel {
 
     private APIRecord api;
     private OAuth2.GrantType grantType;
-    private boolean pkce = false, twoFactor = false, captcha = false;
+    private boolean pkce = false, authCode = false, twoFactor = false, captcha = false;
+    private String authorizationCode;
     private String twoFactorCode;
     private boolean captchaVisible = false;
     private String captchaCode;
@@ -46,6 +47,7 @@ public class APIOAuth2Panel extends ConfigPanel {
             OAuth2 authType = (OAuth2) APIManager.get().getAPI(api.getId()).getAuthType().getAuthType();
             grantType = authType.getGrantType();
             pkce = authType.requiresPKCE();
+            authCode = authType.requiresAuthCode();
             twoFactor = authType.requiresTwoFactor();
             captcha = authType.requiresCaptcha();
             if (grantType.equals(OAuth2.GrantType.AUTHORIZATIONCODE)) {
@@ -74,7 +76,7 @@ public class APIOAuth2Panel extends ConfigPanel {
         authLinkSection.add(new ExternalLink("oauth2-authorize", Model.of(oauth2AuthUrl)) {
             @Override
             public boolean isVisible() {
-                return !pkce;
+                return !pkce || authCode;
             }
         });
         authLinkSection.add(new CsrfPreventingForm("form") {
@@ -86,7 +88,6 @@ public class APIOAuth2Panel extends ConfigPanel {
                     if (captcha && captchaBytes != null) {
                         captchaVisible = true;
                     }
-                    APIOAuth2Panel.this.configPage.setConfigPanel(APIOAuth2Panel.this.returnPanel);
                 } catch (Throwable ex) {
                     logger.error("Error authorizing API", ex);
                 }
@@ -94,7 +95,7 @@ public class APIOAuth2Panel extends ConfigPanel {
 
             @Override
             public boolean isVisible() {
-                return pkce;
+                return pkce && !authCode;
             }
         });
         add(authLinkSection);
@@ -112,7 +113,7 @@ public class APIOAuth2Panel extends ConfigPanel {
                     try {
                         OAuth2 authType = (OAuth2) APIManager.get().getAPI(api.getId()).getAuthType().getAuthType();
                         authType.setCaptchaCode(captchaCode);
-                        APIOAuth2Panel.this.configPage.setConfigPanel(APIOAuth2Panel.this.returnPanel);
+                        configPage.setConfigPanel(returnPanel);
                     } catch (Throwable ex) {
                         logger.error("Error saving captcha code", ex);
                     }
@@ -123,6 +124,30 @@ public class APIOAuth2Panel extends ConfigPanel {
         captchaForm.add(new TextField<String>("captchaCode", new PropertyModel<String>(this, "captchaCode")));
         captchaSection.add(captchaForm);
         add(captchaSection);
+
+        WebMarkupContainer authCodeSection = new WebMarkupContainer("authCode") {
+            @Override
+            public boolean isVisible() {
+                return authCode;
+            }
+        };
+        Form authCodeForm = new CsrfPreventingForm("form") {
+            @Override
+            protected void onSubmitInternal() {
+                if (authorizationCode != null && !authorizationCode.equals("")) {
+                    try {
+                        OAuth2 authType = (OAuth2) APIManager.get().getAPI(api.getId()).getAuthType().getAuthType();
+                        authType.setAuthorizationCode(authorizationCode);
+                        configPage.setConfigPanel(returnPanel);
+                    } catch (Throwable ex) {
+                        logger.error("Error saving authorization code", ex);
+                    }
+                }
+            }
+        };
+        authCodeForm.add(new TextField<String>("authCode", new PropertyModel<String>(this, "authorizationCode")));
+        authCodeSection.add(authCodeForm);
+        add(authCodeSection);
 
         WebMarkupContainer twoFactorSection = new WebMarkupContainer("twoFactor") {
             @Override
@@ -141,7 +166,7 @@ public class APIOAuth2Panel extends ConfigPanel {
                         apiObj.getVariables().setVariable(OAuth2.VARIABLE_2FA_CODE, twoFactorCode);
                         apiObj.getVariables().clearVariable(OAuth2.VARIABLE_2FA_CODE_WAITING);
                         gatewayContext.getPersistenceInterface().notifyRecordUpdated(api);
-                        APIOAuth2Panel.this.configPage.setConfigPanel(APIOAuth2Panel.this.returnPanel);
+                        configPage.setConfigPanel(returnPanel);
                     } catch (Throwable ex) {
                         logger.error("Error saving 2FA code", ex);
                     }
@@ -168,6 +193,7 @@ public class APIOAuth2Panel extends ConfigPanel {
                     apiObj.getVariables().clearVariable(OAuth2.VARIABLE_2FA_CODE);
                     apiObj.getVariables().clearVariable(OAuth2.VARIABLE_2FA_CODE_WAITING);
                     gatewayContext.getPersistenceInterface().notifyRecordUpdated(api);
+                    configPage.setConfigPanel(returnPanel);
                 } catch (Throwable ex) {
                     logger.error("Error resetting 2FA", ex);
                 }

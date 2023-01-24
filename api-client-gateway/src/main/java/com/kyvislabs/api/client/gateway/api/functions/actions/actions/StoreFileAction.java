@@ -50,7 +50,7 @@ public class StoreFileAction extends Action {
         this.fileName = ValueString.parseValueString(function.getApi(), yamlMap, "fileName", true);
         this.extension = (String) yamlMap.getOrDefault("extension", "jpeg");
         this.contentType = (String) yamlMap.getOrDefault("contentType", "image/jpeg");
-        this.path = ValueString.parseValueString(function.getApi(), yamlMap, "path");
+        this.path = ValueString.parseValueString(function.getApi(), yamlMap, "path", function.getName());
     }
 
     public synchronized ValueString getFileId() {

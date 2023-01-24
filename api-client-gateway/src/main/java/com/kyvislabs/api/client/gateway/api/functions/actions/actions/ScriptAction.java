@@ -19,7 +19,7 @@ public class ScriptAction extends Action {
 
     private Logger logger;
     private ValueString project;
-    private String script;
+    private ValueString script;
 
     public ScriptAction(Function function) {
         super(function);
@@ -35,14 +35,14 @@ public class ScriptAction extends Action {
         }
 
         this.project = ValueString.parseValueString(getFunction().getApi(), yamlMap, "project");
-        this.script = (String) yamlMap.get("script");
+        this.script = ValueString.parseValueString(getFunction().getApi(), yamlMap, "script");
     }
 
     private synchronized ValueString getProject() {
         return project;
     }
 
-    private synchronized String getScript() {
+    private synchronized ValueString getScript() {
         return script;
     }
 
@@ -64,7 +64,7 @@ public class ScriptAction extends Action {
             pyLocals.__setitem__("statusCode", new PyInteger(statusCode));
             pyLocals.__setitem__("contentType", new PyString(contentType));
             pyLocals.__setitem__("response", new PyString(response));
-            String code = getScript() + "(statusCode, contentType, response)";
+            String code = getScript().getValue(store, response) + "(statusCode, contentType, response)";
             scriptManager.runCode(code, pyLocals, pyGlobals, "APIScriptAction");
         } catch (Throwable ex) {
             throw new APIException("Error handling script action", ex);

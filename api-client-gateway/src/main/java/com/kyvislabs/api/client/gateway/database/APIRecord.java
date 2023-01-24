@@ -1,11 +1,11 @@
 package com.kyvislabs.api.client.gateway.database;
 
 import com.inductiveautomation.ignition.gateway.localdb.persistence.*;
+import org.apache.wicket.validation.IValidatable;
+import org.apache.wicket.validation.IValidationError;
+import org.apache.wicket.validation.IValidator;
 import org.yaml.snakeyaml.Yaml;
 import simpleorm.dataset.SFieldFlags;
-import simpleorm.dataset.SFieldMeta;
-import simpleorm.dataset.SRecordInstance;
-import simpleorm.dataset.validation.SValidatorI;
 import simpleorm.utils.SException;
 
 import java.util.Map;
@@ -20,23 +20,23 @@ public class APIRecord extends PersistentRecord {
     public static final IdentityField Id = new IdentityField(META, "Id");
     public static final StringField Name = new StringField(META, "Name", SFieldFlags.SMANDATORY, SFieldFlags.SDESCRIPTIVE).setIndexed(true).setUnique(true);
     public static final BooleanField Enabled = new BooleanField(META, "Enabled").setDefault(true);
-    public static final StringField Configuration = new StringField(META, "Configuration", 2147483647, SFieldFlags.SMANDATORY).setMultiLine().addValidator(new SValidatorI() {
+    public static final StringField Configuration = new StringField(META, "Configuration", 2147483647, SFieldFlags.SMANDATORY).setMultiLine().addValidator(new IValidator() {
         @Override
-        public void onValidate(SFieldMeta field, SRecordInstance instance) throws SException.Validation {
-            if (!instance.isNull(field)) {
-                String val = instance.getString(field);
+        public void validate(IValidatable iValidatable) {
+            String val = (String) iValidatable.getValue();
 
+            if (val != null && !val.equals("")) {
                 try {
                     Yaml yaml = new Yaml();
                     Map yamlMap = yaml.load(val);
                     if (yamlMap == null) {
-                        throw new SException.Validation("Empty YAML");
+                        iValidatable.error((IValidationError) iErrorMessageSource -> "Empty YAML");
                     }
                 } catch (Throwable ex) {
-                    throw new SException.Validation("Invalid or empty YAML");
+                    iValidatable.error((IValidationError) iErrorMessageSource -> "Invalid or empty YAML");
                 }
             } else {
-                throw new SException.Validation("Field " + field + " cannot be NULL");
+                throw new SException.Validation("YAML cannot be NULL");
             }
         }
     });

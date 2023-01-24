@@ -5,6 +5,7 @@ import com.inductiveautomation.ignition.common.sqltags.model.types.DataType;
 import com.inductiveautomation.ignition.common.tags.model.TagPath;
 import com.inductiveautomation.ignition.gateway.tags.managed.WriteHandler;
 import com.kyvislabs.api.client.common.exceptions.APIException;
+import com.kyvislabs.api.client.gateway.api.functions.Function;
 import com.kyvislabs.api.client.gateway.api.interfaces.VariableStore;
 import com.kyvislabs.api.client.gateway.database.APIWebhookRecord;
 
@@ -181,8 +182,16 @@ public class WebhookKey implements VariableStore, WriteHandler {
     }
 
     public void handleResponse(int statusCode, String contentType, String response) throws APIException {
-        response = webhook.getHandle().getResponseFormat().format(this, response);
-        webhook.getHandle().getActions().handleResponse(this, statusCode, contentType, response);
+        try {
+            response = webhook.getHandle().getResponseFormat().format(this, response);
+            webhook.getHandle().getActions().handleResponse(this, statusCode, contentType, response);
+        } catch (Throwable t) {
+            webhook.getHandle().setStatus(Function.FunctionStatus.FAILED);
+            webhook.getLogger().error("Error handling webhook response", t);
+            throw t;
+        }
+
+        webhook.getHandle().setStatus(Function.FunctionStatus.SUCCESS);
     }
 
     @Override

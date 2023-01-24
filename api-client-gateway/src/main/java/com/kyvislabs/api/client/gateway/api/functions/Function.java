@@ -110,13 +110,7 @@ public class Function implements VariableStore {
             initTags();
 
             if (getSchedule() != null) {
-                logger.debug("Scheduling with fixed delay at " + getSchedule().toString());
-                FunctionExecutor executor = new FunctionExecutor(logger, this, null);
-                if (getSchedule().getDuration() == 0) {
-                    api.getGatewayContext().getScheduledExecutorService().execute(executor);
-                } else {
-                    getSchedule().setScheduledFuture(api.getGatewayContext().getScheduledExecutorService().scheduleWithFixedDelay(executor, 0, getSchedule().getDuration(), getSchedule().getUnit()));
-                }
+                getSchedule().schedule(logger, this);
             }
         } catch (Throwable ex) {
             throw new APIException("Error starting up function '" + name + "': " + ex.getMessage(), ex);
@@ -125,11 +119,10 @@ public class Function implements VariableStore {
 
     public void shutdown() {
         logger.debug("Shutting down");
-        if (getSchedule() != null && getSchedule().getScheduledFuture() != null) {
-            getSchedule().getScheduledFuture().cancel(true);
+        if (getSchedule() != null) {
+            getSchedule().shutdown();
         }
-
-        actions.shutdown();
+        getActions().shutdown();
     }
 
     public synchronized API getApi() {

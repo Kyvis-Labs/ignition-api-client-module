@@ -150,6 +150,8 @@ class URLConnectionExecutor implements HttpExecutor {
         }
 
         // headers
+        conn.setRequestProperty(NAME_ACCEPT, "*/*");
+
         if (!request.userAgent().isEmpty()) {
             conn.setRequestProperty(NAME_USER_AGENT, request.userAgent());
         }

@@ -73,10 +73,10 @@ public class TagActionProcessor {
                     action.getFunction().getApi().getTagManager().tagUpdate(tagPath, switchCase.getVariable("value").getValue(store, response));
                 }
             } else if (action.getTagAction().equals(TagAction.TagActionEnum.JSONEXPAND) || action.getTagAction().equals(TagAction.TagActionEnum.JSONWRITE)) {
-                // Find all of the rename paths if they exist
+                // Find all the rename paths if they exist
                 findRenames();
 
-                // Find all of the UDTs paths if they exist
+                // Find all the UDTs paths if they exist
                 findUDTs();
 
                 Object responseObj = this.response;

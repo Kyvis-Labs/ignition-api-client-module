@@ -30,7 +30,7 @@
                         OAuth2 Authorize Link
                     </td>
                     <td class="trow-body">
-                        <a wicket:id="oauth2-authorize">Click to authorize this API</a>
+                        <a target="_blank" wicket:id="oauth2-authorize">Click to authorize this API</a>
                         <form wicket:id="form" style="margin-top: 0px;">
                             <input class="savebtn" type="submit" style="display: inline-block; padding-top: 4px; padding-bottom: 6px; margin-left: 2px;" value="Click to authorize this API" />
                         </form>
@@ -44,6 +44,17 @@
                         <form wicket:id="form" style="margin-top: 0px;">
                             <img wicket:id="captchaImage" /><br />
                             <input wicket:id="captchaCode" type="text" style="display: inline-block;" />
+                            <input class="savebtn" type="submit" style="display: inline-block; padding-top: 4px; padding-bottom: 6px; margin-left: 2px;" wicket:message="value:API.Variable.SaveButton"/>
+                        </form>
+                    </td>
+                </tr>
+                <tr wicket:id="authCode">
+                    <td class="trow-title">
+                        OAuth2 Authorization Code
+                    </td>
+                    <td class="trow-body">
+                        <form wicket:id="form" style="margin-top: 0px;">
+                            <input wicket:id="authCode" type="text" style="display: inline-block;" />
                             <input class="savebtn" type="submit" style="display: inline-block; padding-top: 4px; padding-bottom: 6px; margin-left: 2px;" wicket:message="value:API.Variable.SaveButton"/>
                         </form>
                     </td>

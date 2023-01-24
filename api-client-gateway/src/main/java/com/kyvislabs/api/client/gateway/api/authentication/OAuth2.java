@@ -9,6 +9,7 @@ import com.kyvislabs.api.client.gateway.api.functions.Function;
 import com.kyvislabs.api.client.gateway.api.interfaces.VariableStore;
 import com.kyvislabs.api.client.gateway.managers.CertificateManager;
 import net.dongliu.requests.*;
+import net.dongliu.requests.utils.URLUtils;
 import org.apache.commons.codec.binary.Base64;
 import org.json.JSONObject;
 import org.jsoup.Jsoup;
@@ -18,8 +19,11 @@ import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URL;
+import java.nio.charset.Charset;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -62,7 +66,7 @@ public class OAuth2 extends AbstractAuthType {
     private String bearerGrantType;
     private boolean twoFactor;
     private boolean captcha;
-    private boolean pkce;
+    private boolean pkce, authCode;
     private boolean randomUserAgent;
     private String userAgent = null;
 
@@ -113,6 +117,7 @@ public class OAuth2 extends AbstractAuthType {
         this.twoFactor = Boolean.valueOf(yamlMap.getOrDefault("2fa", "false").toString());
         this.captcha = Boolean.valueOf(yamlMap.getOrDefault("captcha", "false").toString());
         this.pkce = Boolean.valueOf(yamlMap.getOrDefault("pkce", "false").toString());
+        this.authCode = Boolean.valueOf(yamlMap.getOrDefault("authCode", "false").toString());
         this.randomUserAgent = Boolean.valueOf(yamlMap.getOrDefault("randomUserAgent", "false").toString());
     }
 
@@ -278,6 +283,10 @@ public class OAuth2 extends AbstractAuthType {
         return pkce;
     }
 
+    public synchronized boolean requiresAuthCode() {
+        return authCode;
+    }
+
     public synchronized String getCodeVerifier() throws APIException {
         return api.getVariables().getVariable(VARIABLE_PKCE_CODE_VERIFIER);
     }
@@ -290,20 +299,35 @@ public class OAuth2 extends AbstractAuthType {
         return headers;
     }
 
-    public String getAuthorizationUrl() throws APIException {
+    public String getAuthorizationUrl() throws APIException, MalformedURLException {
         String url = getAuthUrl().getValue();
 
         if (requiresPKCE()) {
-            return url;
+            if (requiresAuthCode()) {
+                setUserAgent(null);
+                generateCodeChallenge();
+                List<Map.Entry<String, String>> tmpParams = new ArrayList<>();
+                tmpParams.add(Parameter.of("client_id", getActualClientId()));
+                tmpParams.add(Parameter.of("code_challenge", getCodeChallenge()));
+                tmpParams.add(Parameter.of("code_challenge_method", "S256"));
+                tmpParams.add(Parameter.of("redirect_uri", getActualRedirectUrl()));
+                tmpParams.add(Parameter.of("response_type", "code"));
+                tmpParams.add(Parameter.of("scope", getScope()));
+                tmpParams.add(Parameter.of("state", getRedirectState()));
+                url = URLUtils.joinUrl(new URL(url), URLUtils.toStringParameters(tmpParams), Charset.defaultCharset()).toString();
+            } else {
+                return url;
+            }
         } else {
-            url += "?";
-            url += "redirect_uri=" + getActualRedirectUrl() + "&";
-            url += "state=" + getRedirectState() + "&";
-            url += "access_type=offline&";
-            url += "prompt=consent&";
-            url += "client_id=" + getActualClientId() + "&";
-            url += "response_type=code&";
-            url += "scope=" + getScope();
+            List<Map.Entry<String, String>> tmpParams = new ArrayList<>();
+            tmpParams.add(Parameter.of("client_id", getActualClientId()));
+            tmpParams.add(Parameter.of("redirect_uri", getActualRedirectUrl()));
+            tmpParams.add(Parameter.of("response_type", "code"));
+            tmpParams.add(Parameter.of("scope", getScope()));
+            tmpParams.add(Parameter.of("state", getRedirectState()));
+            tmpParams.add(Parameter.of("access_type", "offline"));
+            tmpParams.add(Parameter.of("prompt", "consent"));
+            url = URLUtils.joinUrl(new URL(url), URLUtils.toStringParameters(tmpParams), Charset.defaultCharset()).toString();
         }
 
         return url;
@@ -481,8 +505,12 @@ public class OAuth2 extends AbstractAuthType {
     }
 
     private String getBaseUrl(RawResponse res, String url) throws Exception {
-        URI uri = new URI(res.url());
-        return uri.getScheme() + "://" + uri.getHost() + url;
+        if (url == null || url.equals("")) {
+            return res.url();
+        } else {
+            URI uri = new URI(res.url());
+            return uri.getScheme() + "://" + uri.getHost() + url;
+        }
     }
 
     public byte[] getAuthorizationPage() throws Exception {
@@ -568,6 +596,18 @@ public class OAuth2 extends AbstractAuthType {
         }
     }
 
+    public void setAuthorizationCode(String authorizationCode) {
+        try {
+            api.getVariables().setVariable(OAuth2.VARIABLE_AUTHORIZATION_CODE, authorizationCode);
+            api.getVariables().clearVariable(OAuth2.VARIABLE_ACCESS_TOKEN);
+            api.getVariables().clearVariable(OAuth2.VARIABLE_REFRESH_TOKEN);
+            api.getVariables().clearVariable(OAuth2.VARIABLE_EXPIRATION);
+            api.getGatewayContext().getPersistenceInterface().notifyRecordUpdated(api.getRecord());
+        } catch (Throwable t) {
+            logger.error("Error setting authorization code", t);
+        }
+    }
+
     public void setCaptchaCode(String captchaCode) {
         try {
             authBody.put("captcha", captchaCode);
@@ -587,7 +627,7 @@ public class OAuth2 extends AbstractAuthType {
 
             getAuthorizationCode(res);
         } catch (Throwable t) {
-            logger.error("Error getting captcha code", t);
+            logger.error("Error setting captcha code", t);
         }
     }
 
@@ -621,11 +661,7 @@ public class OAuth2 extends AbstractAuthType {
             if (params.containsKey("code")) {
                 String code = params.get("code");
                 logger.debug("Found code: " + code);
-                api.getVariables().setVariable(OAuth2.VARIABLE_AUTHORIZATION_CODE, code);
-                api.getVariables().clearVariable(OAuth2.VARIABLE_ACCESS_TOKEN);
-                api.getVariables().clearVariable(OAuth2.VARIABLE_REFRESH_TOKEN);
-                api.getVariables().clearVariable(OAuth2.VARIABLE_EXPIRATION);
-                api.getGatewayContext().getPersistenceInterface().notifyRecordUpdated(api.getRecord());
+                setAuthorizationCode(code);
             } else {
                 logger.error("Couldn't find code in Location header: " + location);
             }
