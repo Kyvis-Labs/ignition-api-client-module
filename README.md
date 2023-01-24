@@ -49,6 +49,8 @@ Strings of text following a  `#`  are comments and are ignored by the system.
 Here is an example YAML configuration for an API. This example gets data from Open Weather Map. The API defines 2 variables that must be entered by the user, `appId` and `cityId`, since they are different for each user and are sensitive data. There are 2 API functions that are called, `currentWeather` and `forecast`. The current weather function runs every 5 minutes, gets the current weather, and stores the result in tags. The forecast function does the same but gets 5-day forecasts.
 
 ```yaml
+version: 1
+
 api:
   name: OpenWeatherMap
   description: Interfaces with OpenWeatherMap for current and forecast data
@@ -108,6 +110,7 @@ functions:
 
 There are 7 top level configuration parameters that define an API: 
 
+- [version](#version)
 - [api](#api)
 - [session](#apisession)
 - [httpsVerification](#httpsverification)
@@ -117,6 +120,21 @@ There are 7 top level configuration parameters that define an API:
 - [headers](#headers)
 - [webhooks](#webhooks)
 - [functions](#functions)
+
+## version
+
+The YAML configuration will go through many iterations. Versioning is critical. This allows you to specify the version of the YAML so the module knows what to expect.
+
+### Parameters
+
+**version** integer *(required)*
+The version of the YAML. Defaults to 1.
+
+### Example
+
+```yaml
+version: 1
+```
 
 ## api
 
