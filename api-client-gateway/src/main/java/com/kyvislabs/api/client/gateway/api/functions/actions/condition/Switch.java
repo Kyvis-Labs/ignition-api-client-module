@@ -24,13 +24,13 @@ public class Switch implements YamlParser {
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         if (yamlMap.containsKey("cases")) {
             List casesList = (List) yamlMap.get("cases");
             for (Object caseObj : casesList) {
                 Map caseMap = (Map) caseObj;
                 Case switchCase = new Case(logger, function);
-                switchCase.parse(caseMap);
+                switchCase.parse(version, caseMap);
                 cases.add(switchCase);
             }
         }

@@ -22,7 +22,7 @@ public class UDT implements YamlParser {
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         if (!yamlMap.containsKey("id")) {
             throw new APIException("Tag UDT missing id");
         }
@@ -32,7 +32,7 @@ public class UDT implements YamlParser {
         this.items = ValueString.parseItemsValueString(action.getFunction().getApi(), yamlMap);
         this.path = ValueString.parseValueString(action.getFunction().getApi(), yamlMap, "path", "");
         this.name = ValueString.parseValueString(action.getFunction().getApi(), yamlMap, "name", id);
-        this.tags = Tag.parseTags(yamlMap, action);
+        this.tags = Tag.parseTags(version, yamlMap, action);
     }
 
     public synchronized String getId() {

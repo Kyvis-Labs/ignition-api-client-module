@@ -52,11 +52,11 @@ public class Function implements VariableStore {
         this.allowedErrorCodes = Collections.synchronizedList(new ArrayList<>());
     }
 
-    public void parse(Map yamlMap) throws APIException {
-        parse(yamlMap, false);
+    public void parse(Integer version, Map yamlMap) throws APIException {
+        parse(version, yamlMap, false);
     }
 
-    public void parse(Map yamlMap, boolean skipUrlCheck) throws APIException {
+    public void parse(Integer version, Map yamlMap, boolean skipUrlCheck) throws APIException {
         try {
             if (!skipUrlCheck) {
                 if (!yamlMap.containsKey("url")) {
@@ -68,13 +68,13 @@ public class Function implements VariableStore {
             }
 
             method = Method.valueOf(yamlMap.getOrDefault("method", "get").toString().toUpperCase());
-            headers.parse(yamlMap);
-            parameters = Parameter.parseParameters(this.getApi(), yamlMap);
-            body.parse(yamlMap);
+            headers.parse(version, yamlMap);
+            parameters = Parameter.parseParameters(this.getApi(), version, yamlMap);
+            body.parse(version, yamlMap);
             responseType = ResponseType.valueOf(yamlMap.getOrDefault("responseType", "none").toString().toUpperCase());
-            responseFormat.parse(yamlMap);
+            responseFormat.parse(version, yamlMap);
             schedule = Schedule.parseSchedule(this, yamlMap);
-            actions.parse(yamlMap);
+            actions.parse(version, yamlMap);
 
             depends = (String) yamlMap.getOrDefault("depends", null);
             dependsAlways = false;

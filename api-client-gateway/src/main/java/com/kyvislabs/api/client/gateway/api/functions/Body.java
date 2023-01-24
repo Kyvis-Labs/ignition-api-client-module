@@ -38,13 +38,13 @@ public class Body implements YamlParser {
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         if (yamlMap.containsKey("body")) {
             Map bodyMap = (Map) yamlMap.get("body");
             type = BodyType.valueOf(bodyMap.getOrDefault("type", "none").toString().toUpperCase());
             value = ValueString.parseValueString(function.getApi(), bodyMap, "value");
             contentType = (String) bodyMap.getOrDefault("contentType", null);
-            this.parameters = Parameter.parseParameters(function.getApi(), bodyMap);
+            this.parameters = Parameter.parseParameters(function.getApi(), version, bodyMap);
         } else {
             type = BodyType.NONE;
             value = null;

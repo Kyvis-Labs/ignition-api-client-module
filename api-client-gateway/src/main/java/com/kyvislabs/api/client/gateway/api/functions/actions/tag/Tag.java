@@ -31,14 +31,14 @@ public class Tag implements YamlParser {
         this.action = action;
     }
 
-    public static List<Tag> parseTags(Map yamlMap, Action action) throws APIException {
+    public static List<Tag> parseTags(Integer version, Map yamlMap, Action action) throws APIException {
         List<Tag> tags = Collections.synchronizedList(new ArrayList<>());
         if (yamlMap.containsKey("tags")) {
             List tagsList = (List) yamlMap.get("tags");
             for (Object tagObj : tagsList) {
                 Map tagMap = (Map) tagObj;
                 Tag tag = new Tag(action);
-                tag.parse(tagMap);
+                tag.parse(version, tagMap);
                 tags.add(tag);
             }
         }
@@ -46,7 +46,7 @@ public class Tag implements YamlParser {
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         if (!yamlMap.containsKey("name")) {
             throw new APIException("Tag missing name");
         }
@@ -86,7 +86,7 @@ public class Tag implements YamlParser {
         if (yamlMap.containsKey("handler")) {
             Map handlerMap = (Map) yamlMap.get("handler");
             this.handler = new Handler(action);
-            this.handler.parse(handlerMap);
+            this.handler.parse(version, handlerMap);
         }
 
         addIfNotExists = Boolean.valueOf(yamlMap.getOrDefault("addIfNotExists", "true").toString());

@@ -22,7 +22,7 @@ public class Webhooks implements YamlParser {
         this.webhooks = new ConcurrentHashMap<>();
     }
 
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         if (yamlMap.containsKey("webhooks")) {
             Map webhooksMap = (Map) yamlMap.get("webhooks");
             Iterator<String> it = webhooksMap.keySet().iterator();
@@ -30,7 +30,7 @@ public class Webhooks implements YamlParser {
                 String name = it.next();
                 Map webhookMap = (Map) webhooksMap.get(name);
                 Webhook webhook = new Webhook(api, name);
-                webhook.parse(webhookMap);
+                webhook.parse(version, webhookMap);
                 webhooks.put(name, webhook);
             }
         }

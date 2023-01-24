@@ -26,14 +26,14 @@ public class VariableAction extends Action {
         this.logger = LoggerFactory.getLogger(String.format("API.%s.Function.%s.Action.Variable", function.getApi().getName(), function.getLoggerName()));
     }
 
-    public static List<VariableAction> parseVariables(Map yamlMap, Action action) throws APIException {
+    public static List<VariableAction> parseVariables(Integer version, Map yamlMap, Action action) throws APIException {
         List<VariableAction> variables = Collections.synchronizedList(new ArrayList<>());
         if (yamlMap.containsKey("variables")) {
             List variablesList = (List) yamlMap.get("variables");
             for (Object variableObj : variablesList) {
                 Map variableMap = (Map) variableObj;
                 VariableAction variable = new VariableAction(action.getFunction());
-                variable.parse(variableMap);
+                variable.parse(version, variableMap);
                 variables.add(variable);
             }
         }
@@ -41,8 +41,8 @@ public class VariableAction extends Action {
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
-        super.parse(yamlMap);
+    public void parse(Integer version, Map yamlMap) throws APIException {
+        super.parse(version, yamlMap);
 
         if (!yamlMap.containsKey("name")) {
             throw new APIException("Variable missing name");

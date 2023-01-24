@@ -20,14 +20,14 @@ public class Parameter implements YamlParser {
         this.api = api;
     }
 
-    public static List<Parameter> parseParameters(API api, Map yamlMap) throws APIException {
+    public static List<Parameter> parseParameters(API api, Integer version, Map yamlMap) throws APIException {
         List<Parameter> parameters = Collections.synchronizedList(new ArrayList<>());
         if (yamlMap.containsKey("params")) {
             List paramsList = (List) yamlMap.get("params");
             for (Object paramsObj : paramsList) {
                 Map paramsMap = (Map) paramsObj;
                 Parameter parameter = new Parameter(api);
-                parameter.parse(paramsMap);
+                parameter.parse(version, paramsMap);
                 parameters.add(parameter);
             }
         }
@@ -43,7 +43,7 @@ public class Parameter implements YamlParser {
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         if (!yamlMap.containsKey("name") || !yamlMap.containsKey("value")) {
             throw new APIException("Parameter missing name/value pair: " + yamlMap.toString());
         }

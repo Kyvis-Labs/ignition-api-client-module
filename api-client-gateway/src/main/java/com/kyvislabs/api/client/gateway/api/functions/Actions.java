@@ -20,13 +20,13 @@ public class Actions implements YamlParser, ResponseHandler {
         this.actions = Collections.synchronizedList(new ArrayList<>());
     }
 
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         if (yamlMap.containsKey("actions")) {
             List actionsList = (List) yamlMap.get("actions");
             for (Object actionObj : actionsList) {
                 Map actionMap = (Map) actionObj;
                 Action action = Action.getAction(function, actionMap);
-                action.parse(actionMap);
+                action.parse(version, actionMap);
                 actions.add(action);
             }
         }

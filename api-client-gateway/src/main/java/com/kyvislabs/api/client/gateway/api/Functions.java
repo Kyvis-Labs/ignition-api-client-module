@@ -21,7 +21,7 @@ public class Functions implements YamlParser {
         this.functions = new ConcurrentHashMap<>();
     }
 
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         if (yamlMap.containsKey("functions")) {
             Map functionsMap = (Map) yamlMap.get("functions");
             Iterator<String> it = functionsMap.keySet().iterator();
@@ -29,7 +29,7 @@ public class Functions implements YamlParser {
                 String name = it.next();
                 Map functionMap = (Map) functionsMap.get(name);
                 Function function = new Function(api, name);
-                function.parse(functionMap);
+                function.parse(version, functionMap);
                 functions.put(name, function);
             }
         }

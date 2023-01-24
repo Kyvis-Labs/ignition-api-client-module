@@ -82,7 +82,7 @@ public class OAuth2 extends AbstractAuthType {
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         this.grantType = GrantType.valueOf(yamlMap.getOrDefault("grantType", "AUTHORIZATIONCODE").toString().toUpperCase());
 
         if (this.grantType.equals(GrantType.AUTHORIZATIONCODE) && !yamlMap.containsKey("authUrl")) {
@@ -98,7 +98,7 @@ public class OAuth2 extends AbstractAuthType {
         }
 
         this.authUrl = ValueString.parseValueString(api, yamlMap, "authUrl", this.grantType.equals(GrantType.AUTHORIZATIONCODE));
-        headers.parse(yamlMap);
+        headers.parse(version, yamlMap);
         this.accessTokenUrl = ValueString.parseValueString(api, yamlMap, "accessTokenUrl", true);
         this.accessTokenKey = (String) yamlMap.getOrDefault("accessTokenKey", "access_token");
         this.usernameInput = (String) yamlMap.getOrDefault("usernameInput", "username");

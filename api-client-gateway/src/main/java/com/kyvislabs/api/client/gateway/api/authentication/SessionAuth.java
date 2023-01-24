@@ -39,13 +39,13 @@ public class SessionAuth extends AbstractAuthType {
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         if (!yamlMap.containsKey("url")) {
             throw new APIException("SessionAuth: Missing auth URL");
         }
 
         this.url = ValueString.parseValueString(api, yamlMap, "url", true);
-        this.parameters = Parameter.parseParameters(api, yamlMap);
+        this.parameters = Parameter.parseParameters(api, version, yamlMap);
     }
 
     @Override

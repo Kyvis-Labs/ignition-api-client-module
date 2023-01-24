@@ -22,9 +22,9 @@ public class Condition extends RunIf {
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         condition = new Case(logger, function);
-        condition.parse(yamlMap);
+        condition.parse(version, yamlMap);
     }
 
     public synchronized Case getCondition() {

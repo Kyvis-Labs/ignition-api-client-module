@@ -97,7 +97,7 @@ public class Variables implements YamlParser, VariableStore {
         setVariable(name, null, null, null, value == null ? null : value.toString());
     }
 
-    public void parse(Map yamlMap) {
+    public void parse(Integer version, Map yamlMap) {
         if (yamlMap.containsKey("variables")) {
             Map variablesMap = (Map) yamlMap.get("variables");
             Iterator<String> it = variablesMap.keySet().iterator();

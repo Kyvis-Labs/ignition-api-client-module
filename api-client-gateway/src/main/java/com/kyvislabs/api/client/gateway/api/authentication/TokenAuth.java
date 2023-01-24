@@ -48,7 +48,7 @@ public class TokenAuth extends AbstractAuthType {
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         if (!yamlMap.containsKey("url")) {
             throw new APIException("TokenAuth: Missing auth URL");
         }
@@ -56,8 +56,8 @@ public class TokenAuth extends AbstractAuthType {
         this.url = ValueString.parseValueString(api, yamlMap, "url", true);
         this.usernameKey = ValueString.parseValueString(api, yamlMap, "usernameKey", "username");
         this.passwordKey = ValueString.parseValueString(api, yamlMap, "passwordKey", "password");
-        headers.parse(yamlMap);
-        this.parameters = Parameter.parseParameters(api, yamlMap);
+        headers.parse(version, yamlMap);
+        this.parameters = Parameter.parseParameters(api, version, yamlMap);
         this.expiresIn = (Integer) yamlMap.getOrDefault("expiresIn", null);
 
         if (yamlMap.containsKey("tokens")) {

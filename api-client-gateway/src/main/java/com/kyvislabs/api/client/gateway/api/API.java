@@ -61,7 +61,9 @@ public class API implements WriteHandler {
             setStatus(APIStatus.INITIALIZING);
 
             try {
-                authType.parse(yamlMap);
+                Integer version = Integer.valueOf((String) yamlMap.getOrDefault("version", 1));
+
+                authType.parse(version, yamlMap);
 
                 if (authType.requiresSession() || Boolean.valueOf(yamlMap.getOrDefault("session", "false").toString())) {
                     session = Requests.session();
@@ -93,10 +95,10 @@ public class API implements WriteHandler {
                     }
                 }
 
-                headers.parse(yamlMap);
-                variables.parse(yamlMap);
-                webhooks.parse(yamlMap);
-                functions.parse(yamlMap);
+                headers.parse(version, yamlMap);
+                variables.parse(version, yamlMap);
+                webhooks.parse(version, yamlMap);
+                functions.parse(version, yamlMap);
 
                 authType.initializeVariables();
                 if (!variables.initComplete()) {

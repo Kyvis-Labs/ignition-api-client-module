@@ -37,8 +37,8 @@ public class TagAction extends Action {
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
-        super.parse(yamlMap);
+    public void parse(Integer version, Map yamlMap) throws APIException {
+        super.parse(version, yamlMap);
 
         if (!yamlMap.containsKey("type")) {
             throw new APIException("Missing type");
@@ -57,14 +57,14 @@ public class TagAction extends Action {
             for (Object udtObj : udtsList) {
                 Map udtMap = (Map) udtObj;
                 UDT udt = new UDT(this);
-                udt.parse(udtMap);
+                udt.parse(version, udtMap);
                 udts.put(udt.getId(), udt);
             }
         }
 
-        this.tags = Tag.parseTags(yamlMap, this);
-        this.renameTags = RenameTag.parseRenameTags(yamlMap, this);
-        this.switchCases.parse(yamlMap);
+        this.tags = Tag.parseTags(version, yamlMap, this);
+        this.renameTags = RenameTag.parseRenameTags(version, yamlMap, this);
+        this.switchCases.parse(version, yamlMap);
     }
 
     public synchronized ValueString getPath() {

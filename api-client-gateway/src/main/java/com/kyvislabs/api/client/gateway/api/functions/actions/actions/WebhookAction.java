@@ -30,8 +30,8 @@ public class WebhookAction extends Action {
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
-        super.parse(yamlMap);
+    public void parse(Integer version, Map yamlMap) throws APIException {
+        super.parse(version, yamlMap);
 
         if (!yamlMap.containsKey("name")) {
             throw new APIException("Name missing");
@@ -49,7 +49,7 @@ public class WebhookAction extends Action {
         this.ttl = ttl == null ? null : Integer.valueOf(ttl.toString());
 
         this.items = ValueString.parseItemsValueString(function.getApi(), yamlMap);
-        this.variables = VariableAction.parseVariables(yamlMap, this);
+        this.variables = VariableAction.parseVariables(version, yamlMap, this);
     }
 
     private synchronized ValueString getKey() {

@@ -15,7 +15,7 @@ public class Headers implements YamlParser {
         this.headers = Collections.synchronizedList(new ArrayList<>());
     }
 
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         if (yamlMap.containsKey("headers")) {
             List headersList = (List) yamlMap.get("headers");
             for (Object headerObj : headersList) {

@@ -25,7 +25,7 @@ public class StoreFileIdNotExists extends RunIf {
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         if (!yamlMap.containsKey("fileId")) {
             throw new APIException("File id missing");
         }

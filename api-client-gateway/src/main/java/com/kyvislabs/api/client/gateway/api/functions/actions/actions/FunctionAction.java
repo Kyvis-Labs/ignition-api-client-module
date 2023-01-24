@@ -36,8 +36,8 @@ public class FunctionAction extends Action implements VariableStore {
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
-        super.parse(yamlMap);
+    public void parse(Integer version, Map yamlMap) throws APIException {
+        super.parse(version, yamlMap);
 
         this.type = FunctionTypeEnum.valueOf(yamlMap.getOrDefault("type", "direct").toString().toUpperCase());
 
@@ -58,12 +58,12 @@ public class FunctionAction extends Action implements VariableStore {
         }
 
         this.items = ValueString.parseItemsValueString(function.getApi(), yamlMap);
-        this.variables = VariableAction.parseVariables(yamlMap, this);
+        this.variables = VariableAction.parseVariables(version, yamlMap, this);
 
         condition = null;
         if (type.equals(FunctionTypeEnum.CONDITION)) {
             condition = new Case(logger, function);
-            condition.parse(yamlMap);
+            condition.parse(version, yamlMap);
         }
 
         retry = Retry.parseRetry(function, yamlMap);

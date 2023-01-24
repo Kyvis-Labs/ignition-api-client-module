@@ -19,14 +19,14 @@ public class RenameTag implements YamlParser {
         this.action = action;
     }
 
-    public static List<RenameTag> parseRenameTags(Map yamlMap, Action action) throws APIException {
+    public static List<RenameTag> parseRenameTags(Integer version, Map yamlMap, Action action) throws APIException {
         List<RenameTag> renameTags = Collections.synchronizedList(new ArrayList<>());
         if (yamlMap.containsKey("rename")) {
             List renameList = (List) yamlMap.get("rename");
             for (Object renameObj : renameList) {
                 Map renameMap = (Map) renameObj;
                 RenameTag renameTag = new RenameTag(action);
-                renameTag.parse(renameMap);
+                renameTag.parse(version, renameMap);
                 renameTags.add(renameTag);
             }
         }
@@ -34,7 +34,7 @@ public class RenameTag implements YamlParser {
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         if (!yamlMap.containsKey("name")) {
             throw new APIException("Rename tag missing name");
         }

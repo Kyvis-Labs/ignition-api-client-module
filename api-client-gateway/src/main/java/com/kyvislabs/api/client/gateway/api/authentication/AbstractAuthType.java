@@ -17,7 +17,7 @@ public abstract class AbstractAuthType implements AuthTypeInterface, YamlParser 
         return api;
     }
 
-    public static final AbstractAuthType getAuthType(API api, Map yamlMap) throws APIException {
+    public static final AbstractAuthType getAuthType(API api, Integer version, Map yamlMap) throws APIException {
         AbstractAuthType authType = null;
         if (yamlMap.containsKey("authType")) {
             Map authTypeMap = (Map) yamlMap.get("authType");
@@ -41,7 +41,7 @@ public abstract class AbstractAuthType implements AuthTypeInterface, YamlParser 
                 throw new APIException("Authentication type '" + authTypeStr + "' not recognized");
             }
 
-            authType.parse(authTypeMap);
+            authType.parse(version, authTypeMap);
         } else {
             authType = new NoAuth(api);
         }
@@ -50,7 +50,7 @@ public abstract class AbstractAuthType implements AuthTypeInterface, YamlParser 
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         // no-op
     }
 

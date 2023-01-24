@@ -20,10 +20,10 @@ public class Handler implements YamlParser {
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         this.function = (String) yamlMap.getOrDefault("function", null);
         this.reset = (Boolean) yamlMap.getOrDefault("reset", false);
-        this.variables = VariableAction.parseVariables(yamlMap, action);
+        this.variables = VariableAction.parseVariables(version, yamlMap, action);
     }
 
     public synchronized Action getAction() {

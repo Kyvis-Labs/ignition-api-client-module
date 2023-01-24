@@ -27,8 +27,8 @@ public class ScriptAction extends Action {
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
-        super.parse(yamlMap);
+    public void parse(Integer version, Map yamlMap) throws APIException {
+        super.parse(version, yamlMap);
 
         if (!yamlMap.containsKey("script")) {
             throw new APIException("Script missing");

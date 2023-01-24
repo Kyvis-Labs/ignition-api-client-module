@@ -26,7 +26,7 @@ public class Case implements YamlParser {
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         if (!yamlMap.containsKey("conditionKey")) {
             throw new APIException("Missing condition key");
         }

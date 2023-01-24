@@ -30,7 +30,7 @@ public class ResponseFormat implements YamlParser {
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         this.value = null;
         this.type = ResponseFormatType.NONE;
 

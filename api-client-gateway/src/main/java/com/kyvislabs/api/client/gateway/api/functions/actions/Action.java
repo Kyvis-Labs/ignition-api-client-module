@@ -54,7 +54,7 @@ public abstract class Action implements YamlParser, ResponseHandler {
     }
 
     @Override
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         runIf = RunIf.getRunIf(function, yamlMap);
     }
 

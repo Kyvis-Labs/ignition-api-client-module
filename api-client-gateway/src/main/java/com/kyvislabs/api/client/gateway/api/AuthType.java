@@ -16,8 +16,8 @@ public class AuthType implements YamlParser, AuthTypeInterface {
         this.api = api;
     }
 
-    public void parse(Map yamlMap) throws APIException {
-        this.authType = AbstractAuthType.getAuthType(api, yamlMap);
+    public void parse(Integer version, Map yamlMap) throws APIException {
+        this.authType = AbstractAuthType.getAuthType(api, version, yamlMap);
     }
 
     @Override

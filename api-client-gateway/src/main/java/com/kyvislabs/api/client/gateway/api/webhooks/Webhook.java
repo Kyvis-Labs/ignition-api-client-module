@@ -38,7 +38,7 @@ public class Webhook {
         this.webhookKeys = new ConcurrentHashMap<>();
     }
 
-    public void parse(Map yamlMap) throws APIException {
+    public void parse(Integer version, Map yamlMap) throws APIException {
         try {
             if (!yamlMap.containsKey("check")) {
                 throw new APIException("Missing webhook check function");
@@ -69,16 +69,16 @@ public class Webhook {
 
             String tagPrefix = "Webhooks/" + getName();
             check = new Function(api, "check", tagPrefix);
-            check.parse((Map) yamlMap.get("check"));
+            check.parse(version, (Map) yamlMap.get("check"));
 
             add = new Function(api, "add", tagPrefix);
-            add.parse((Map) yamlMap.get("add"));
+            add.parse(version, (Map) yamlMap.get("add"));
 
             remove = new Function(api, "remove", tagPrefix);
-            remove.parse((Map) yamlMap.get("remove"));
+            remove.parse(version, (Map) yamlMap.get("remove"));
 
             handle = new Function(api, "handle", tagPrefix);
-            handle.parse((Map) yamlMap.get("handle"), true);
+            handle.parse(version, (Map) yamlMap.get("handle"), true);
         } catch (Throwable ex) {
             throw new APIException("Error parsing webhook '" + name + "': " + ex.getMessage(), ex);
         }
