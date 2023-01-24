@@ -61,7 +61,7 @@ public class API implements WriteHandler {
             setStatus(APIStatus.INITIALIZING);
 
             try {
-                Integer version = Integer.valueOf((String) yamlMap.getOrDefault("version", 1));
+                Integer version = Integer.valueOf(yamlMap.getOrDefault("version", 1).toString());
 
                 authType.parse(version, yamlMap);
 

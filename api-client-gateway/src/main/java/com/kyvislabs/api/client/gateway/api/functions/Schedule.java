@@ -130,8 +130,12 @@ public class Schedule implements TagChangeListener {
         return value;
     }
 
-    public Date getNextDate() {
-        return new Date(new Date().getTime() + getUnit().toMillis(getDuration()));
+    public synchronized Date getNextDate() {
+        if (getType().equals(ScheduleType.TIMER)) {
+            return new Date(new Date().getTime() + getUnit().toMillis(getDuration()));
+        }
+
+        return null;
     }
 
     public synchronized void setScheduledFuture(ScheduledFuture scheduledFuture) {
@@ -183,6 +187,19 @@ public class Schedule implements TagChangeListener {
         } catch (Throwable t) {
             logger.error("Error executing tag change listener: " + t.getMessage(), t);
         }
+    }
+
+    @Override
+    public String toString() {
+        if (getType().equals(ScheduleType.TIMER)) {
+            return String.format("Timer: %d %s", getDuration(), getUnit().toString().toLowerCase());
+        } else if (getType().equals(ScheduleType.CRON)) {
+            return String.format("Cron: %s", getCron());
+        } else if (getType().equals(ScheduleType.TAG)) {
+            return String.format("Tag: %s%s%s", getTagPath(), getOperator().getDisplay(), getValue() == null ? "null" : getValue().toString());
+        }
+
+        return "Unknown";
     }
 
     public enum ScheduleType {

@@ -132,12 +132,22 @@ public class Case implements YamlParser {
     }
 
     public enum ConditionOperator {
-        EQ,
-        LT,
-        GT,
-        LTE,
-        GTE,
-        IN,
-        NEQ
+        EQ("="),
+        LT("<"),
+        GT(">"),
+        LTE("<="),
+        GTE(">="),
+        IN("in"),
+        NEQ("!=");
+
+        private String display;
+
+        ConditionOperator(String display) {
+            this.display = display;
+        }
+
+        public String getDisplay() {
+            return display;
+        }
     }
 }

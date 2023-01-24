@@ -138,10 +138,6 @@ public class FunctionExecutor implements Runnable, Callable<Integer> {
         function.setStatus(success ? Function.FunctionStatus.SUCCESS : Function.FunctionStatus.FAILED);
         function.updateStatusTag("Response", error ? response : "");
 
-        if (error) {
-            logger.error("Error execution function: " + response);
-        }
-
         long processStartTime = 0;
         long processEndTime = 0;
         if (success) {
