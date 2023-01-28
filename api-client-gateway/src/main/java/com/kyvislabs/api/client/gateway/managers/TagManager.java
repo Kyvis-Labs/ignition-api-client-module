@@ -1,6 +1,7 @@
 package com.kyvislabs.api.client.gateway.managers;
 
 import com.inductiveautomation.ignition.common.config.BasicBoundPropertySet;
+import com.inductiveautomation.ignition.common.config.BoundPropertySet;
 import com.inductiveautomation.ignition.common.model.values.BasicQualifiedValue;
 import com.inductiveautomation.ignition.common.model.values.QualifiedValue;
 import com.inductiveautomation.ignition.common.model.values.QualityCode;
@@ -39,13 +40,7 @@ public class TagManager {
 
     public void startup() {
         logger.debug("Starting up");
-        managedTagProvider = gatewayContext.getTagManager().getOrCreateManagedProvider(new ProviderConfiguration(PROVIDER_NAME)
-                .setAllowTagCustomization(true)
-                .setPersistTags(true)
-                .setPersistValues(true)
-                .setAllowTagDeletion(true)
-                .setHasDataTypes(true)
-                .setAttribute(TagProviderMeta.FLAG_HAS_OPCBROWSE, false));
+        managedTagProvider = gatewayContext.getTagManager().getOrCreateManagedProvider(new ProviderConfiguration(PROVIDER_NAME).setAllowTagCustomization(true).setPersistTags(true).setPersistValues(true).setAllowTagDeletion(true).setHasDataTypes(true).setAttribute(TagProviderMeta.FLAG_HAS_OPCBROWSE, false));
         tagProvider = gatewayContext.getTagManager().getTagProvider(PROVIDER_NAME);
     }
 
@@ -125,29 +120,8 @@ public class TagManager {
         }
     }
 
-    public void registerTag(TagConfiguration tag) throws Exception {
-        registerTags(Arrays.asList(tag));
-    }
-
-    public void registerTag(TagConfiguration tag, CollisionPolicy policy) throws Exception {
-        registerTags(Arrays.asList(tag), policy);
-    }
-
-    public void registerTags(List<TagConfiguration> tags) throws Exception {
-        registerTags(tags, CollisionPolicy.Ignore);
-    }
-
-    public void registerTags(List<TagConfiguration> tags, CollisionPolicy policy) throws Exception {
-        List<TagConfiguration> finalTags = new ArrayList<>();
-        for (TagConfiguration tag : tags) {
-            if (!tagExists(tag.getPath().toStringFull())) {
-                finalTags.add(tag);
-                logger.debug("Registering tag: " + tag.toString());
-            }
-        }
-        if (finalTags.size() > 0) {
-            tagProvider.saveTagConfigsAsync(finalTags, policy).get();
-        }
+    public void configureTag(TagConfiguration tagConfiguration) {
+        configureTag(tagConfiguration.getPath().toStringFull(), tagConfiguration.getTagProperties());
     }
 
     public void configureTag(String tagPath, DataType dataType) {
@@ -155,14 +129,18 @@ public class TagManager {
     }
 
     public void configureTag(String tagPath, DataType dataType, Object value) {
+        BasicBoundPropertySet props = new BasicBoundPropertySet();
+        props.set(WellKnownTagProps.DataType, dataType);
+        if (value != null) {
+            props.set(WellKnownTagProps.Value, new BasicQualifiedValue(value));
+        }
+        configureTag(tagPath, props);
+    }
+
+    public void configureTag(String tagPath, BoundPropertySet props) {
         tagPath = fixTagPath(tagPath);
         if (!tagExists(tagPath)) {
-            BasicBoundPropertySet props = new BasicBoundPropertySet();
-            props.set(WellKnownTagProps.DataType, dataType);
-            if (value != null) {
-                props.set(WellKnownTagProps.Value, new BasicQualifiedValue(value));
-            }
-            logger.debug("Configuring tag '" + tagPath + "' with data type '" + dataType.toString() + "' and value '" + (value == null ? "null" : value.toString()) + "'");
+            logger.debug("Configuring tag '" + tagPath + "' with " + props.toString());
             managedTagProvider.configureTag(tagPath, props);
         }
     }
@@ -202,8 +180,7 @@ public class TagManager {
             TagPath tp = TagPathParser.parse(tagPath);
             tps.add(tp);
         }
-        logger.debug("Reading tags [" + tps.stream()
-                .map(e -> e.toStringFull()).collect(Collectors.joining(",")) + "]");
+        logger.debug("Reading tags [" + tps.stream().map(e -> e.toStringFull()).collect(Collectors.joining(",")) + "]");
         return tagProvider.readAsync(tps, SecurityContext.systemContext()).get();
     }
 }

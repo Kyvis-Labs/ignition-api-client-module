@@ -130,9 +130,7 @@ public class TagActionProcessor {
             }
         }
 
-        logger.debug("Found Renames: " + renamePathList.keySet().stream()
-                .map(key -> key + "=" + renamePathList.get(key))
-                .collect(Collectors.joining(", ", "{", "}")));
+        logger.debug("Found Renames: " + renamePathList.keySet().stream().map(key -> key + "=" + renamePathList.get(key)).collect(Collectors.joining(", ", "{", "}")));
     }
 
     private void findUDTs() throws APIException {
@@ -142,9 +140,7 @@ public class TagActionProcessor {
             }
         }
 
-        logger.debug("Found UDTs: " + udtPathList.keySet().stream()
-                .map(key -> key + "=" + udtPathList.get(key).getUdt())
-                .collect(Collectors.joining(", ", "{", "}")));
+        logger.debug("Found UDTs: " + udtPathList.keySet().stream().map(key -> key + "=" + udtPathList.get(key).getUdt()).collect(Collectors.joining(", ", "{", "}")));
     }
 
     private List<ParseObject> iterateJSONObject(String prefix, String jsonPath, Object input, boolean jsonExpand) throws Exception {
@@ -344,9 +340,9 @@ public class TagActionProcessor {
         if (tag.getAddIfNotExists() || action.getFunction().getApi().getTagManager().tagExists(tagPath)) {
             if (configure && tag.getAddIfNotExists()) {
                 if (tag.isExpression()) {
-                    action.getFunction().getApi().getTagManager().registerTag(TagBuilder.createExpressionTag(tagPath, tag.getDataType(), tag.getExpression()));
+                    action.getFunction().getApi().getTagManager().configureTag(TagBuilder.createExpressionTag(tagPath, tag.getDataType(), tag.getExpression()));
                 } else if (tag.isDerived()) {
-                    action.getFunction().getApi().getTagManager().registerTag(TagBuilder.createDerivedTag(tagPath, tag.getDataType(), tag.getDerivedSource(), tag.getDerivedRead(), tag.getDerivedWrite()));
+                    action.getFunction().getApi().getTagManager().configureTag(TagBuilder.createDerivedTag(tagPath, tag.getDataType(), tag.getDerivedSource(), tag.getDerivedRead(), tag.getDerivedWrite()));
                 } else {
                     action.getFunction().getApi().getTagManager().configureTag(tagPath, tag.getDataType());
                 }

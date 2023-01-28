@@ -6,6 +6,7 @@ import com.inductiveautomation.ignition.common.model.values.BasicQualifiedValue;
 import com.inductiveautomation.ignition.common.sqltags.model.types.DataType;
 import com.inductiveautomation.ignition.common.tags.config.BasicTagConfiguration;
 import com.inductiveautomation.ignition.common.tags.config.TagConfiguration;
+import com.inductiveautomation.ignition.common.tags.config.TagExecutionMode;
 import com.inductiveautomation.ignition.common.tags.config.properties.WellKnownTagProps;
 import com.inductiveautomation.ignition.common.tags.config.types.ExpressionTypeProperties;
 import com.inductiveautomation.ignition.common.tags.config.types.ReferenceTagTypeProps;
@@ -100,6 +101,7 @@ public class TagBuilder {
         BoundPropertySet tag = getTagSet(tagPath, dataType);
         tag.set(WellKnownTagProps.ValueSource, ExpressionTypeProperties.TAG_TYPE);
         tag.set(ExpressionTypeProperties.Expression, expression);
+        tag.set(ExpressionTypeProperties.ExecutionMode, TagExecutionMode.EventDriven);
         BasicTagConfiguration cfg = BasicTagConfiguration.createNew(tagPath, tag);
         return cfg;
     }
