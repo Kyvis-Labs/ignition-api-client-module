@@ -81,6 +81,7 @@ functions:
       - name: units
         value: imperial
     schedule:
+      type: timer
       duration: 5
       unit: minutes
     actions:
@@ -98,6 +99,7 @@ functions:
       - name: units
         value: imperial
     schedule:
+      type: timer
       duration: 5
       unit: minutes
     actions:
