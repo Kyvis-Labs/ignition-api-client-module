@@ -1,5 +1,7 @@
 package com.kyvislabs.api.client.gateway.api.functions.actions.actions;
 
+import com.inductiveautomation.ignition.common.tags.model.TagPath;
+import com.inductiveautomation.ignition.common.tags.paths.parser.TagPathParser;
 import com.kyvislabs.api.client.common.exceptions.APIException;
 import com.kyvislabs.api.client.gateway.api.ValueString;
 import com.kyvislabs.api.client.gateway.api.functions.Function;
@@ -8,10 +10,7 @@ import com.kyvislabs.api.client.gateway.api.interfaces.VariableStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class VariableAction extends Action {
     public static final String ACTION = "variable";
@@ -89,7 +88,8 @@ public class VariableAction extends Action {
         try {
             if (getTagPath() != null) {
                 String tp = getTagPath().getValue(store, response, item);
-                retValue = function.getApi().getTagManager().readTag(tp).getValue();
+                TagPath tagPath = TagPathParser.parse(tp);
+                retValue = function.getApi().getGatewayContext().getTagManager().readAsync(Arrays.asList(tagPath)).get().get(0).getValue();
             } else {
                 retValue = getValue().getValue(store, response, item);
             }
