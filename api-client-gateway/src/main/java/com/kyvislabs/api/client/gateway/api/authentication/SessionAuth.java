@@ -1,5 +1,6 @@
 package com.kyvislabs.api.client.gateway.api.authentication;
 
+import com.google.gson.JsonObject;
 import com.kyvislabs.api.client.common.exceptions.APIException;
 import com.kyvislabs.api.client.gateway.api.API;
 import com.kyvislabs.api.client.gateway.api.ValueString;
@@ -73,14 +74,18 @@ public class SessionAuth extends AbstractAuthType {
     @Override
     public void authenticate(VariableStore store) throws APIException {
         String url = getUrl().getValue(store);
-        List<net.dongliu.requests.Parameter<Object>> params = new ArrayList<>();
-        params.add(net.dongliu.requests.Parameter.of("username", api.getVariables().getVariable(VARIABLE_USER)));
-        params.add(net.dongliu.requests.Parameter.of("password", api.getVariables().getVariable(VARIABLE_PASSWORD)));
-        params.addAll(Parameter.getParameters(getParameters(), store));
-        RequestBuilder builder = api.getRequestBuilder(url, Function.Method.POST).body(params);
 
-        logger.debug(api.getName() + " request [method=" + Function.Method.POST.toString() + ", url=" + url + ", headers=none, params=none, body=" + params.stream()
-                .map(key -> key.name() + "=" + key.value().toString()).collect(Collectors.joining(", ", "{", "}")) + "]");
+        JsonObject obj = new JsonObject();
+       
+        obj.addProperty("username", api.getVariables().getVariable(VARIABLE_USER));
+        obj.addProperty("password", api.getVariables().getVariable(VARIABLE_PASSWORD));
+        for (Parameter param: getParameters()){
+            obj.addProperty(param.getName(),param.getValue(store).toString());
+        }
+        
+        RequestBuilder builder = api.getRequestBuilder(url, Function.Method.POST).body(obj.toString());
+
+        logger.debug(api.getName() + " request [method=" + Function.Method.POST.toString() + ", url=" + url + ", headers=none, params=none, body=" + obj.toString() + "]");
 
         RawResponse res = builder.send();
         boolean success = res.statusCode() >= 200 && res.statusCode() <= 299;
