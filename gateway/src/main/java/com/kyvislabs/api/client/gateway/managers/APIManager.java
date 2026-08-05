@@ -5,6 +5,7 @@ import com.inductiveautomation.ignition.common.tags.config.CollisionPolicy;
 import com.inductiveautomation.ignition.gateway.config.DecodedResource;
 import com.inductiveautomation.ignition.gateway.config.ModifiedResource;
 import com.inductiveautomation.ignition.gateway.config.NamedResourceHandler;
+import com.inductiveautomation.ignition.gateway.config.ResourceTypeMeta;
 import com.inductiveautomation.ignition.gateway.model.GatewayContext;
 import com.kyvislabs.api.client.common.exceptions.APIException;
 import com.kyvislabs.api.client.gateway.api.API;
@@ -66,12 +67,12 @@ public class APIManager {
         tagManager.startup();
         registerUDTs();
 
-        resourceHandler = new APIResourceHandler();
-        resourceHandler.startup(gatewayContext.getConfigurationManager(), ResourceTypes.API_RESOURCE_TYPE_META);
+        resourceHandler = new APIResourceHandler(gatewayContext, ResourceTypes.API_RESOURCE_TYPE_META);
+        resourceHandler.startup();
 
         // Start all currently registered APIs
         for (DecodedResource<APIResource> resource : resourceHandler.getResources()) {
-            apiAddAndStartup(resource.name(), resource.resource());
+            apiAddAndStartup(resource.name(), resource.config());
         }
     }
 
@@ -161,6 +162,10 @@ public class APIManager {
      */
     private class APIResourceHandler extends NamedResourceHandler<APIResource> {
 
+        APIResourceHandler(GatewayContext gatewayContext, ResourceTypeMeta<APIResource> meta) {
+            super(gatewayContext, meta);
+        }
+
         @Override
         public boolean isRenameAware() {
             return true;
@@ -169,16 +174,16 @@ public class APIManager {
         @Override
         public void onResourceAdded(DecodedResource<APIResource> resource) {
             logger.debug("API resource added: " + resource.name());
-            apiAddAndStartup(resource.name(), resource.resource());
+            apiAddAndStartup(resource.name(), resource.config());
         }
 
         @Override
         public void onResourceUpdated(ModifiedResource<APIResource> modified) {
-            String name = modified.current().name();
+            String name = modified.newResource().name();
             logger.debug("API resource updated: " + name);
 
             // Shutdown the old instance if it exists
-            String oldName = modified.previous() != null ? modified.previous().name() : name;
+            String oldName = modified.oldResource() != null ? modified.oldResource().name() : name;
             if (apiConfigurations.containsKey(oldName)) {
                 try {
                     apiConfigurations.get(oldName).shutdown();
@@ -188,7 +193,7 @@ public class APIManager {
                 }
             }
 
-            apiAddAndStartup(name, modified.current().resource());
+            apiAddAndStartup(name, modified.newResource().config());
         }
 
         @Override

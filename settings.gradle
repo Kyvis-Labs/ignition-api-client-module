@@ -1,5 +1,3 @@
-rootProject.name = "api-client"
-
 pluginManagement {
     repositories {
         gradlePluginPortal()
@@ -7,6 +5,8 @@ pluginManagement {
         maven { url = uri("https://nexus.inductiveautomation.com/repository/inductiveautomation-snapshots") }
     }
 }
+
+rootProject.name = "api-client"
 
 dependencyResolutionManagement {
     repositories {

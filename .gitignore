@@ -349,17 +349,32 @@ MigrationBackup/
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
 .idea/*
-api-client-gateway/target/*
-api-client-build/target/*
-api-client-common/target/*
-api-client-client/target/*
-api-client-designer/target/*
+build/
+gateway/target/*
+build/target/*
+common/target/*
+client/target/*
+designer/target/*
+web-ui/target/*
 
 # Intelij files
 *.iml
-/api-client-gateway/target/
-/api-client-designer/target/
-/api-client-client/target/
-/api-client-common/target/
-/api-client-build/target/
-/api-client-build/modulesigner/
+/gateway/target/
+/designer/target/
+/client/target/
+/common/target/
+/build/target/
+/gateway/build/
+/designer/build/
+/client/build/
+/common/build/
+/build/build/
+/build/modulesigner/
+/web-ui/target/
+/web-ui/build/
+
+web-ui/yarn.lock
+
+.gradle
+.claude
+*.DS_Store

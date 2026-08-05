@@ -1,7 +1,7 @@
 package com.kyvislabs.api.client.designer;
 
 import com.inductiveautomation.ignition.client.gateway_interface.GatewayConnection;
-import com.inductiveautomation.ignition.common.gateway.services.ProtoRpcSerializer;
+import com.inductiveautomation.ignition.common.rpc.proto.ProtoRpcSerializer;
 import com.inductiveautomation.ignition.common.script.ScriptManager;
 import com.inductiveautomation.ignition.common.script.hints.PropertiesFileDocProvider;
 import com.inductiveautomation.ignition.designer.model.AbstractDesignerModuleHook;

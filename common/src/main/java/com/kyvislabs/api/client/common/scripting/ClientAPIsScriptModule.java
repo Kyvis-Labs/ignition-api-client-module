@@ -1,6 +1,6 @@
 package com.kyvislabs.api.client.common.scripting;
 
-import com.inductiveautomation.ignition.common.gateway.services.ProtoRpcSerializer;
+import com.inductiveautomation.ignition.common.rpc.proto.ProtoRpcSerializer;
 import com.kyvislabs.api.client.common.exceptions.APIException;
 import com.kyvislabs.api.client.common.scripting.interfaces.APIsInterface;
 import org.python.core.PyDictionary;

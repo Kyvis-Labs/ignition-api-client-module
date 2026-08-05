@@ -3,6 +3,8 @@ package com.kyvislabs.api.client.gateway.api;
 import com.inductiveautomation.ignition.common.model.values.QualityCode;
 import com.inductiveautomation.ignition.common.tags.model.TagPath;
 import com.inductiveautomation.ignition.gateway.model.GatewayContext;
+import com.inductiveautomation.ignition.gateway.secrets.Plaintext;
+import com.inductiveautomation.ignition.gateway.secrets.Secret;
 import com.inductiveautomation.ignition.gateway.tags.managed.WriteHandler;
 import com.kyvislabs.api.client.gateway.api.functions.Function;
 import com.kyvislabs.api.client.gateway.managers.APIManager;
@@ -79,9 +81,10 @@ public class API implements WriteHandler {
                         setStatus(APIStatus.MISSING_CERTIFICATE);
                     } else {
                         try {
-                            String privKeyStr = cert.privateKey().getPlaintext()
-                                    .map(s -> s)
-                                    .orElse(null);
+                            String privKeyStr;
+                            try (Plaintext plaintext = Secret.create(getGatewayContext(), cert.privateKey()).getPlaintext()) {
+                                privKeyStr = plaintext.getAsString();
+                            }
                             if (privKeyStr == null || privKeyStr.isEmpty()) {
                                 setStatus(APIStatus.MISSING_CERTIFICATE);
                             } else {

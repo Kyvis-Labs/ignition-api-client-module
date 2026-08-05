@@ -1,6 +1,6 @@
 package com.kyvislabs.api.client.common.scripting.interfaces;
 
-import com.inductiveautomation.ignition.common.gateway.services.RpcInterface;
+import com.inductiveautomation.ignition.common.rpc.RpcInterface;
 import com.kyvislabs.api.client.common.exceptions.APIException;
 import org.python.core.PyDictionary;
 

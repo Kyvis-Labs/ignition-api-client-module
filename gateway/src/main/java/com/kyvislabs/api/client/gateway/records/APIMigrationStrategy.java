@@ -1,129 +1,125 @@
 package com.kyvislabs.api.client.gateway.records;
 
-import com.inductiveautomation.ignition.gateway.config.IdbMigrationStrategy;
-import com.inductiveautomation.ignition.gateway.config.MigrationContext;
+import com.inductiveautomation.ignition.common.resourcecollection.ChangeOperation;
+import com.inductiveautomation.ignition.common.resourcecollection.LastModification;
+import com.inductiveautomation.ignition.common.resourcecollection.Resource;
+import com.inductiveautomation.ignition.common.resourcecollection.ResourceBuilder;
+import com.inductiveautomation.ignition.gateway.config.migration.IdbMigrationStrategy;
+import com.inductiveautomation.ignition.gateway.config.migration.MigrationContext;
+import com.inductiveautomation.ignition.gateway.config.migration.MigrationException;
+import com.inductiveautomation.ignition.gateway.config.migration.MigrationLog;
+import com.kyvislabs.api.client.gateway.records.legacy.LegacyAPICertificateRecord;
+import com.kyvislabs.api.client.gateway.records.legacy.LegacyAPIRecord;
+import com.kyvislabs.api.client.gateway.records.legacy.LegacyAPIVariableRecord;
+import com.inductiveautomation.ignition.gateway.secrets.Plaintext;
 import com.inductiveautomation.ignition.gateway.secrets.SecretConfig;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import simpleorm.dataset.SQuery;
+import simpleorm.dataset.SRecordInstance;
+import simpleorm.dataset.SRecordMeta;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Migrates old PersistentRecord-based API configurations to the new ConfigurationManager resource system.
  *
  * Old schema:
- *   - APIRecord (Id, Name, Enabled, Configuration YAML)
- *   - APIVariableRecord (Id, APIId FK, Key, Value encrypted, Required, Sensitive, Hidden)
- *   - APICertificateRecord (Id, APIId FK, Certificate, PrivateKey)
+ *   - API (Id, Name, Enabled, Configuration YAML)
+ *   - APIVariable (Id, APIId FK, Key, Value encoded, Required, Sensitive, Hidden)
+ *   - APICertificate (Id, APIId FK, Certificate, PrivateKey)
  *
  * New schema: APIResource record (embedded variables + certificate)
  */
 public class APIMigrationStrategy implements IdbMigrationStrategy {
-    private final Logger logger = LoggerFactory.getLogger("API.Migration");
 
     @Override
-    public void migrate(MigrationContext context) throws Exception {
-        logger.info("Starting API Client migration from 8.1 PersistentRecords to 8.3 ConfigurationManager");
-
-        try {
-            // Query all old APIRecord rows via raw SQL since PersistentRecord classes are being removed
-            List<OldAPIRecord> oldApis = context.queryLegacyRecords(
-                    "SELECT Id, Name, Enabled, Configuration FROM API",
-                    rs -> new OldAPIRecord(
-                            rs.getLong("Id"),
-                            rs.getString("Name"),
-                            rs.getBoolean("Enabled"),
-                            rs.getString("Configuration")
-                    )
-            );
-
-            logger.info("Found " + oldApis.size() + " API records to migrate");
-
-            for (OldAPIRecord oldApi : oldApis) {
-                try {
-                    migrateApi(context, oldApi);
-                    logger.info("Migrated API: " + oldApi.name());
-                } catch (Exception e) {
-                    logger.error("Failed to migrate API: " + oldApi.name(), e);
-                }
-            }
-
-            logger.info("API Client migration complete");
-        } catch (Exception e) {
-            logger.warn("Could not query legacy API records (table may not exist - fresh install): " + e.getMessage());
-        }
+    public List<SRecordMeta<? extends SRecordInstance>> getRecordMetas() {
+        return List.of(LegacyAPIRecord.META, LegacyAPIVariableRecord.META, LegacyAPICertificateRecord.META);
     }
 
-    private void migrateApi(MigrationContext context, OldAPIRecord oldApi) throws Exception {
+    @Override
+    public MigrationResult migrate(MigrationContext context) throws MigrationException {
+        MigrationLog log = context.getLog();
+        log.strategyMessage("Starting API Client migration from 8.1 PersistentRecords to 8.3 ConfigurationManager");
+
+        List<ChangeOperation> changeOperations = new ArrayList<>();
+
+        List<LegacyAPIRecord> oldApis;
+        try {
+            oldApis = context.getPersistenceSession().query(new SQuery<>(LegacyAPIRecord.META));
+        } catch (Exception e) {
+            log.strategyMessage("Could not query legacy API records (table may not exist - fresh install): " + e.getMessage());
+            return new MigrationResult(changeOperations, getTableNames());
+        }
+
+        log.strategyMessage("Found " + oldApis.size() + " API records to migrate");
+
+        for (LegacyAPIRecord oldApi : oldApis) {
+            try {
+                changeOperations.add(migrateApi(context, oldApi));
+                log.strategyMessage("Migrated API: " + oldApi.getName());
+            } catch (Exception e) {
+                log.strategyError("Failed to migrate API: " + oldApi.getName(), e);
+            }
+        }
+
+        log.strategyMessage("API Client migration complete");
+        return new MigrationResult(changeOperations, getTableNames());
+    }
+
+    private ChangeOperation migrateApi(MigrationContext context, LegacyAPIRecord oldApi) throws Exception {
         // Load variables for this API
         List<APIResource.APIVariable> variables = new ArrayList<>();
-        try {
-            List<OldAPIVariableRecord> oldVariables = context.queryLegacyRecords(
-                    "SELECT Key, Value, Required, Sensitive, Hidden FROM APIVariable WHERE APIId = " + oldApi.id(),
-                    rs -> new OldAPIVariableRecord(
-                            rs.getString("Key"),
-                            rs.getString("Value"),
-                            rs.getBoolean("Required"),
-                            rs.getBoolean("Sensitive"),
-                            rs.getBoolean("Hidden")
-                    )
-            );
+        List<LegacyAPIVariableRecord> oldVariables = context.getPersistenceSession().query(
+                new SQuery<>(LegacyAPIVariableRecord.META).eq(LegacyAPIVariableRecord.APIId, oldApi.getId()));
 
-            for (OldAPIVariableRecord oldVar : oldVariables) {
-                SecretConfig secretValue = oldVar.value() != null
-                        ? SecretConfig.ofPlaintext(oldVar.value())
-                        : SecretConfig.empty();
-                variables.add(new APIResource.APIVariable(
-                        oldVar.key(),
-                        secretValue,
-                        oldVar.required(),
-                        oldVar.sensitive(),
-                        oldVar.hidden()
-                ));
-            }
-        } catch (Exception e) {
-            logger.warn("Could not load variables for API " + oldApi.name() + ": " + e.getMessage());
+        for (LegacyAPIVariableRecord oldVar : oldVariables) {
+            variables.add(new APIResource.APIVariable(
+                    oldVar.getKey(),
+                    toSecretConfig(context, oldVar.getValue()),
+                    oldVar.isRequired(),
+                    oldVar.isSensitive(),
+                    oldVar.isHidden()
+            ));
         }
 
         // Load certificate for this API
         APIResource.APICertificate certificate = null;
-        try {
-            List<OldAPICertificateRecord> oldCerts = context.queryLegacyRecords(
-                    "SELECT Certificate, PrivateKey FROM APICertificate WHERE APIId = " + oldApi.id(),
-                    rs -> new OldAPICertificateRecord(
-                            rs.getString("Certificate"),
-                            rs.getString("PrivateKey")
-                    )
-            );
+        List<LegacyAPICertificateRecord> oldCerts = context.getPersistenceSession().query(
+                new SQuery<>(LegacyAPICertificateRecord.META).eq(LegacyAPICertificateRecord.APIId, oldApi.getId()));
 
-            if (!oldCerts.isEmpty()) {
-                OldAPICertificateRecord oldCert = oldCerts.get(0);
-                if (oldCert.certificate() != null && oldCert.privateKey() != null) {
-                    certificate = new APIResource.APICertificate(
-                            oldCert.certificate(),
-                            SecretConfig.ofPlaintext(oldCert.privateKey())
-                    );
-                }
+        if (!oldCerts.isEmpty()) {
+            LegacyAPICertificateRecord oldCert = oldCerts.get(0);
+            if (oldCert.getCertificate() != null && oldCert.getPrivateKey() != null) {
+                certificate = new APIResource.APICertificate(
+                        oldCert.getCertificate(),
+                        toSecretConfig(context, oldCert.getPrivateKey())
+                );
             }
-        } catch (Exception e) {
-            logger.warn("Could not load certificate for API " + oldApi.name() + ": " + e.getMessage());
         }
 
         // Build the new resource
         APIResource resource = new APIResource(
-                oldApi.enabled(),
-                oldApi.configuration() != null ? oldApi.configuration() : "",
+                oldApi.isEnabled(),
+                oldApi.getConfiguration() != null ? oldApi.getConfiguration() : "",
                 variables,
                 certificate
         );
 
-        // Write to new config system using the API name as the resource name
-        context.writeResource(ResourceTypes.API_RESOURCE_TYPE, oldApi.name(), resource);
+        ResourceBuilder builder = Resource.newBuilder()
+                .setResourceCollectionName(ResourceTypes.API_RESOURCE_TYPE_META.getPreferredCollection())
+                .setResourcePath(ResourceTypes.API_RESOURCE_TYPE_META.getPath(oldApi.getName()))
+                .putAttribute("uuid", UUID.randomUUID().toString());
+        ResourceTypes.API_RESOURCE_TYPE_META.getCodec().encode(resource, builder);
+
+        Resource built = LastModification.update(builder.build(), MIGRATION_ACTOR);
+        return ChangeOperation.newCreateOp(built);
     }
 
-    // Simple data holders for legacy records
-    private record OldAPIRecord(long id, String name, boolean enabled, String configuration) {}
-    private record OldAPIVariableRecord(String key, String value, boolean required, boolean sensitive, boolean hidden) {}
-    private record OldAPICertificateRecord(String certificate, String privateKey) {}
+    private SecretConfig toSecretConfig(MigrationContext context, String plaintextValue) throws Exception {
+        try (Plaintext plaintext = Plaintext.fromString(plaintextValue != null ? plaintextValue : "")) {
+            return SecretConfig.embedded(context.getSystemEncryptionService().encryptToJson(plaintext));
+        }
+    }
 }

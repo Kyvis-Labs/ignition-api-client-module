@@ -1,7 +1,12 @@
 import com.github.gradle.node.yarn.task.YarnTask
 
 plugins {
+    `java-library`
     id("com.github.node-gradle.node") version "7.0.2"
+}
+
+java {
+    toolchain { languageVersion.set(JavaLanguageVersion.of(17)) }
 }
 
 node {
@@ -18,20 +23,14 @@ val webpackTask = tasks.register<YarnTask>("webpack") {
     outputs.dir("build/generated-resources")
 }
 
-tasks.register<Copy>("generateResources") {
-    dependsOn(webpackTask)
-    from("build/generated-resources")
-    into("$buildDir/resources/main")
-}
-
-tasks.named("processResources") {
-    dependsOn("generateResources")
-}
-
 sourceSets {
     main {
         resources {
             srcDir("build/generated-resources")
         }
     }
+}
+
+tasks.named("processResources") {
+    dependsOn(webpackTask)
 }

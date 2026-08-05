@@ -1,6 +1,6 @@
 package com.kyvislabs.api.client.gateway.records;
 
-import com.inductiveautomation.ignition.gateway.config.Description;
+import com.inductiveautomation.ignition.gateway.dataroutes.openapi.annotations.Description;
 import com.inductiveautomation.ignition.gateway.secrets.SecretConfig;
 
 import java.util.List;

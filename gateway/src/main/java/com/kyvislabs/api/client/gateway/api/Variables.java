@@ -1,5 +1,7 @@
 package com.kyvislabs.api.client.gateway.api;
 
+import com.inductiveautomation.ignition.gateway.secrets.Plaintext;
+import com.inductiveautomation.ignition.gateway.secrets.Secret;
 import com.kyvislabs.api.client.common.exceptions.APIException;
 import com.kyvislabs.api.client.gateway.api.interfaces.VariableStore;
 import com.kyvislabs.api.client.gateway.api.interfaces.YamlParser;
@@ -33,8 +35,8 @@ public class Variables implements YamlParser, VariableStore {
                 logger.debug("Loading variable '" + variable.key() + "' from APIResource");
                 String value = null;
                 if (variable.value() != null) {
-                    try {
-                        value = variable.value().getPlaintext().orElse(null);
+                    try (Plaintext plaintext = Secret.create(api.getGatewayContext(), variable.value()).getPlaintext()) {
+                        value = plaintext.getAsString();
                     } catch (Throwable t) {
                         logger.warn("Could not decrypt variable '" + variable.key() + "': " + t.getMessage());
                     }

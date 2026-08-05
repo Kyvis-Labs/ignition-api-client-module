@@ -1,6 +1,6 @@
 package com.kyvislabs.api.client.gateway.records;
 
-import com.inductiveautomation.ignition.gateway.config.ResourceType;
+import com.inductiveautomation.ignition.common.resourcecollection.ResourceType;
 import com.inductiveautomation.ignition.gateway.config.ResourceTypeMeta;
 
 public class ResourceTypes {

@@ -1,15 +1,14 @@
 package com.kyvislabs.api.client.gateway;
 
 import com.inductiveautomation.ignition.common.licensing.LicenseState;
+import com.inductiveautomation.ignition.common.rpc.proto.ProtoRpcSerializer;
 import com.inductiveautomation.ignition.common.script.ScriptManager;
 import com.inductiveautomation.ignition.common.script.hints.PropertiesFileDocProvider;
-import com.inductiveautomation.ignition.gateway.config.IdbMigrationStrategy;
+import com.inductiveautomation.ignition.gateway.config.migration.IdbMigrationStrategy;
 import com.inductiveautomation.ignition.gateway.model.AbstractGatewayModuleHook;
 import com.inductiveautomation.ignition.gateway.model.GatewayContext;
 import com.inductiveautomation.ignition.gateway.rpc.GatewayRpcImplementation;
-import com.inductiveautomation.ignition.common.gateway.services.ProtoRpcSerializer;
-import com.inductiveautomation.ignition.gateway.web.resources.MountPathAlias;
-import com.inductiveautomation.ignition.gateway.web.resources.SystemJsModule;
+import com.inductiveautomation.ignition.gateway.web.systemjs.SystemJsModule;
 import com.kyvislabs.api.client.common.scripting.ClientAPIsScriptModule;
 import com.kyvislabs.api.client.common.scripting.ScriptFunctionsScriptModulePyWrapper;
 import com.kyvislabs.api.client.gateway.managers.APIManager;

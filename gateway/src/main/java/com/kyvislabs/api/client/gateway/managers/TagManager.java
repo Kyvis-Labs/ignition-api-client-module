@@ -9,6 +9,7 @@ import com.inductiveautomation.ignition.common.sqltags.model.TagProviderMeta;
 import com.inductiveautomation.ignition.common.sqltags.model.types.DataType;
 import com.inductiveautomation.ignition.common.tags.config.CollisionPolicy;
 import com.inductiveautomation.ignition.common.tags.config.TagConfiguration;
+import com.inductiveautomation.ignition.common.tags.config.TagProviderValuePersistence;
 import com.inductiveautomation.ignition.common.tags.config.properties.WellKnownTagProps;
 import com.inductiveautomation.ignition.common.tags.model.SecurityContext;
 import com.inductiveautomation.ignition.common.tags.model.TagPath;
@@ -16,7 +17,7 @@ import com.inductiveautomation.ignition.common.tags.model.TagProvider;
 import com.inductiveautomation.ignition.common.tags.paths.parser.TagPathParser;
 import com.inductiveautomation.ignition.gateway.model.GatewayContext;
 import com.inductiveautomation.ignition.gateway.tags.managed.ManagedTagProvider;
-import com.inductiveautomation.ignition.gateway.tags.managed.ProviderConfiguration;
+import com.inductiveautomation.ignition.gateway.tags.managed.ManagedTagProviderConfiguration;
 import com.inductiveautomation.ignition.gateway.tags.managed.WriteHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,7 +41,7 @@ public class TagManager {
 
     public void startup() {
         logger.debug("Starting up");
-        managedTagProvider = gatewayContext.getTagManager().getOrCreateManagedProvider(new ProviderConfiguration(PROVIDER_NAME).setAllowTagCustomization(true).setPersistTags(true).setPersistValues(true).setAllowTagDeletion(true).setHasDataTypes(true).setAttribute(TagProviderMeta.FLAG_HAS_OPCBROWSE, false));
+        managedTagProvider = gatewayContext.getTagManager().getOrCreateManagedProvider(ManagedTagProviderConfiguration.builder(PROVIDER_NAME).allowTagCustomization(true).persistTags(true).valuePersistence(TagProviderValuePersistence.Database).allowTagDeletion(true).hasDataTypes(true).setAttribute(TagProviderMeta.FLAG_HAS_OPCBROWSE, false).build());
         tagProvider = gatewayContext.getTagManager().getTagProvider(PROVIDER_NAME);
     }
 
