@@ -1,10 +1,13 @@
 package com.kyvislabs.api.client.gateway;
 
+import com.inductiveautomation.ignition.common.gson.Gson;
+import com.inductiveautomation.ignition.common.gson.GsonBuilder;
 import com.inductiveautomation.ignition.common.licensing.LicenseState;
 import com.inductiveautomation.ignition.common.rpc.proto.ProtoRpcSerializer;
 import com.inductiveautomation.ignition.common.script.ScriptManager;
 import com.inductiveautomation.ignition.common.script.hints.PropertiesFileDocProvider;
 import com.inductiveautomation.ignition.gateway.config.migration.IdbMigrationStrategy;
+import com.inductiveautomation.ignition.gateway.dataroutes.RouteGroup;
 import com.inductiveautomation.ignition.gateway.model.AbstractGatewayModuleHook;
 import com.inductiveautomation.ignition.gateway.model.GatewayContext;
 import com.inductiveautomation.ignition.gateway.rpc.GatewayRpcImplementation;
@@ -27,6 +30,11 @@ public class GatewayHook extends AbstractGatewayModuleHook {
 
     public static final SystemJsModule JS_MODULE =
             new SystemJsModule("com.kyvislabs.api.client", "/res/api-client/api-client.js");
+
+    public static final Gson GSON = new GsonBuilder()
+            .setPrettyPrinting()
+            .serializeNulls()
+            .create();
 
     private ScriptFunctionsScriptModule scriptModule;
     private APIManager apiManager;
@@ -104,6 +112,11 @@ public class GatewayHook extends AbstractGatewayModuleHook {
     @Override
     public List<IdbMigrationStrategy> getRecordMigrationStrategies() {
         return List.of(new APIMigrationStrategy());
+    }
+
+    @Override
+    public void mountRouteHandlers(RouteGroup routes) {
+        apiManager.addRoutes(routes);
     }
 
     @Override

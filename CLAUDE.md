@@ -4,42 +4,46 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an **Ignition Module** that enables REST API interaction through YAML configuration without scripting. It targets Ignition 8.1+ and is built using the Ignition SDK (v8.1.10). The module is installed as a `.modl` file into an Ignition gateway.
+This is an **Ignition Module** that enables REST API interaction through YAML configuration without scripting. It targets **Ignition 8.3+** and is built using the Ignition SDK (v8.3.0). The module is installed as a `.modl` file into an Ignition gateway.
+
+The module was migrated from Ignition 8.1 (Maven, PersistentRecord/Wicket UI) to 8.3 (Gradle, ConfigurationManager, React UI). When in doubt about "the old way" vs "the new way," trust what's actually in the tree — some 8.1 assumptions (numeric API ids, DB-backed persistence, Wicket config pages) no longer apply anywhere.
 
 ## Build Commands
 
 ```bash
 # Build the module (produces .modl file)
-mvn clean package
+./gradlew zipModule
 
 # Output location
-api-client-build/target/api-client-<version>.modl
+build/api-client.signed.modl   (or .unsigned.modl — module signing is skipped by default, see build.gradle.kts)
 ```
 
 There are no automated tests in this repository. Testing is done manually via the Ignition gateway UI or by installing the module.
 
 ## Module Architecture
 
-This is a **Maven multi-module project** with scope-separated components that align with Ignition's deployment model:
+This is a **Gradle multi-module project** (Kotlin DSL) with scope-separated components that align with Ignition's deployment model:
 
 | Module | Ignition Scope | Purpose |
 |--------|---------------|---------|
-| `api-client-common` | CDG (Client/Designer/Gateway) | Shared scripting interface and exceptions |
-| `api-client-gateway` | G (Gateway only) | Core implementation — HTTP execution, YAML parsing, tag management |
-| `api-client-client` | C (Vision Client) | RPC proxy for `system.api` scripting functions |
-| `api-client-designer` | D (Designer) | Registers `system.api` in Designer scope |
-| `api-client-build` | — | Packages all modules into the `.modl` file |
+| `common` | CDG (Client/Designer/Gateway) | Shared scripting interface, exceptions, and RPC serialization glue |
+| `gateway` | G (Gateway only) | Core implementation — HTTP execution, YAML parsing, tag management, ConfigurationManager resources |
+| `client` | C (Vision Client) | RPC proxy for `system.api` scripting functions |
+| `designer` | D (Designer) | RPC proxy for `system.api` in Designer scope |
+| `web-ui` | G | React/TypeScript config UI, built via webpack and bundled as a `SystemJsModule` |
+
+The root `build.gradle.kts` uses the `io.ia.sdk.modl` Gradle plugin (not `ignition-maven-plugin`) to assemble and package the `.modl`. Module id is `com.kyvislabs.api.client`.
 
 ## Gateway Module Deep Dive
 
-The `api-client-gateway` module contains nearly all logic. Key subsystems:
+The `gateway` module contains nearly all logic. Key subsystems:
 
 **Lifecycle & Entry Point**
-- `GatewayHook.java` — Module lifecycle (startup/shutdown), registers tag providers, servlets, and UI pages
-- `managers/APIManager.java` — Singleton managing all API instances; listens for DB record changes via `IRecordListener`
+- `GatewayHook.java` — Module lifecycle (startup/shutdown), registers the `APIResource` type with `ConfigurationManager`, registers the React UI's navigation entry (`SystemJsModule`), registers the RPC implementation (`getRpcImplementation()`), and lists migration strategies (`getRecordMigrationStrategies()`)
+- `managers/APIManager.java` — Singleton managing all API instances. Owns a `NamedResourceHandler<APIResource>` that reacts to ConfigurationManager add/update/remove events, and registers the module's raw `HttpServlet`s (`OAuth2Servlet`, `WebhookServlet`, `StoreFileServlet`) via `gatewayContext.getWebResourceManager().addServlet(...)` in `startup()` — these are **not** wired up anywhere else, so don't assume a different registration path exists.
 
 **API Execution Pipeline**
-1. API config is stored as YAML in `database/APIRecord.java` (persisted in Ignition's internal DB)
+1. API config is stored as YAML inside `records/APIResource.java`, a record persisted as a ConfigurationManager resource (module id `com.kyvislabs.api.client`, type id `api` — see `records/ResourceTypes.java`). APIs are looked up **by name**, not by a numeric id.
 2. `api/API.java` parses YAML and coordinates authentication, functions, headers, variables, and webhooks
 3. `api/functions/Function.java` defines individual HTTP calls
 4. `api/functions/FunctionExecutor.java` performs the actual HTTP request (using the bundled `net.dongliu.requests` library)
@@ -56,18 +60,40 @@ The `api-client-gateway` module contains nearly all logic. Key subsystems:
 - `TagAction` — writes values to Ignition tags
 - `ScriptAction` — executes Python scripts
 - `FunctionAction` — calls other API functions
-- `VariableAction` — stores values in module variables
+- `VariableAction` — stores values in the *function-local* variable store (`Function.setVariable`) — this is separate from, and does not persist to, the API-level `Variables` store below
 - `WebhookAction` — triggers outbound webhooks
-- `StoreFileAction` — saves response content to files
+- `StoreFileAction` — saves response content to files under `<gatewayDataDir>/modules/com.kyvislabs.api.client/<apiName>/`; access is via a random token file (`<token>.token` containing the filename), not a DB row
 - `RunIf` / `Switch` / `Case` — conditional logic
 
 **Tag Management**
 `managers/TagManager.java` and `managers/TagBuilder.java` create and manage a real-time tag provider named `"API"` in Ignition.
 
-**Database Records** (Ignition's internal persistent store)
-- `APIRecord` — stores the full YAML configuration
-- `APIVariableRecord` — stores encrypted variable values
-- `APIWebhookRecord`, `APIFileRecord`, `APICertificateRecord` — supporting metadata
+## Configuration Persistence (ConfigurationManager)
+
+There is no PersistentRecord/DB table for API config anymore. Everything lives in the `APIResource` record (`records/APIResource.java`), embedded as one JSON blob per named API resource:
+- `enabled`, `configuration` (the YAML string)
+- `variables` — `List<APIVariable>`, secrets stored as `SecretConfig` (see below)
+- `certificate` — optional mTLS client cert/key
+- `webhookKeys` — `List<APIWebhookKey>`, one entry per externally-issued webhook key, tagged with which named webhook it belongs to
+
+**Important gotcha:** because variables and webhook keys live inside the *same* resource as the YAML config, persisting a runtime change (e.g. a refreshed OAuth2 token, or a new webhook key) goes through `API.persistResource(...)` → `APIManager.updateResource(...)` → `NamedResourceHandler.modify(...)`, which pushes a real resource change through ConfigurationManager. That **triggers a full async reload of that API instance** (`APIResourceHandler.onResourceUpdated` tears down and reconstructs it), the same as if someone edited the YAML by hand. `Variables.setVariable(String, Object)`/`clearVariable(...)` (the runtime entry points used by auth flows and the OAuth2 callback) persist; the config-parse-time overloads used by `parse()`/`initializeVariables()` (which run on *every* startup/reload) deliberately do **not**, to avoid a reload loop. Keep that split when touching this code — routing a startup-time call through the persisting path is an easy way to create an infinite reload loop (this is especially sharp for `uuid: true` declared variables, which regenerate a fresh value on every load).
+
+Secrets (`APIVariable.value`, `APICertificate.privateKey`) are `com.inductiveautomation.ignition.gateway.secrets.SecretConfig`. To read plaintext: `Secret.create(gatewayContext, secretConfig).getPlaintext()` (try-with-resources, it's `Closeable`). To write: `SecretConfig.embedded(gatewayContext.getSystemEncryptionService().encryptToJson(Plaintext.fromString(value)))`.
+
+**Migration from 8.1**: `records/APIMigrationStrategy.java` is a custom `IdbMigrationStrategy` (not the SDK's generic `NamedRecordMigrationStrategy`, because this module has child tables — variables/certificate/webhooks — that the generic strategy can't join). `records/legacy/Legacy*Record.java` are read-only mirrors of the deleted 8.1 `PersistentRecord` schema (`API`, `APIVariable`, `APICertificate`, `APIWebhook` tables), kept only so the migration strategy can query them via SimpleORM. Don't wire these into anything else.
+
+## Web UI (React)
+
+The `web-ui` module (`web-ui/src/pages/APIs/`) is a small React/TypeScript app, built with webpack and mounted into the gateway page shell as a `SystemJsModule` (see `GatewayHook.JS_MODULE`). It talks to the gateway over the **generic ConfigurationManager REST routes**, not a custom API:
+
+- List: `GET /data/api/v1/resources/list/{moduleId}/{typeId}?limit=&offset=` → `{ items, metadata }`
+- Find one: `GET /data/api/v1/resources/find/{moduleId}/{typeId}/{name}`
+- Create/Update: `POST`/`PUT /data/api/v1/resources/{moduleId}/{typeId}` with an **array**-wrapped body — `[{ name, config }]` (create) or `[{ name, signature, config }]` (update)
+- Delete: `DELETE /data/api/v1/resources/{moduleId}/{typeId}/{name}/{signature}`
+
+`{moduleId}/{typeId}` must match `ResourceTypes.java` exactly (`com.kyvislabs.api.client/api`). The JSON envelope wraps the typed `APIResource` fields under a `config` key alongside resource-level `name`/`description`/`signature` — it is **not** a flat object. Mutating requests need an `X-CSRF-Token` header, sourced via `react-redux`'s `useSelector((state) => state.userSession.csrfToken)` (the gateway page shell provides the Redux store; `react-redux` is a webpack external, not bundled). When editing, always round-trip the *full* `config` object — a `PUT` replaces the whole resource, so sending back only the edited fields silently wipes `variables`/`certificate`/`webhookKeys`.
+
+If you're building a similar page and unsure of the contract, check a working reference implementation rather than guessing the URL scheme — a wrong guess here fails silently as a generic fetch error with no server-side clue.
 
 ## Scripting Interface
 
@@ -77,11 +103,13 @@ The module exposes `system.api` to Ignition scripting environments:
 system.api.invokeFunction("apiName", "functionName", {"param": value})
 ```
 
-The common interface is defined in `api-client-common`, implemented in gateway (`ScriptFunctionsScriptModule.java`), and proxied via RPC in client and designer scopes.
+The common interface (`common/.../scripting/interfaces/APIsInterface.java`) is implemented directly in gateway scope (`gateway/.../scripting/ScriptFunctionsScriptModule.java`, registered straight into the script manager — no RPC involved there). Client and Designer scopes instead get a proxy (`ClientAPIsScriptModule`) built from `GatewayConnection.getRpcInterface(...)`, calling across the RPC boundary via `GatewayHook.getRpcImplementation()` / `GatewayRpcImplementation`.
+
+**Gotcha:** `invokeFunction`'s `functionParameters` argument is a Jython `PyDictionary`, which `ProtoRpcSerializer.DEFAULT_INSTANCE` cannot serialize on its own. `ClientAPIsScriptModule.SERIALIZER` must build a `ProtoRpcSerializer` with `ScriptFunctionsPyDictionaryProtoAdapter` registered via `.addBinaryAdapter(PyDictionary.class, ...)`, or RPC calls from Vision Client/Designer scope fail. If you add another RPC-crossing method with a non-primitive Jython/Java type, check whether it needs a similar adapter before assuming the default serializer handles it.
 
 ## Bundled Library
 
-The HTTP client library `net.dongliu.requests` is included as source in the gateway module (not a Maven dependency) because Ignition modules must bundle all non-SDK dependencies.
+The HTTP client library `net.dongliu.requests` is included as source in the gateway module (not a Gradle dependency) because Ignition modules must bundle all non-SDK dependencies.
 
 ## Key Dependencies
 
@@ -92,6 +120,7 @@ The HTTP client library `net.dongliu.requests` is included as source in the gate
 
 ## Ignition SDK Notes
 
-- All Ignition SDK dependencies use `provided` scope — they are supplied by the Ignition runtime
-- The `ignition-maven-plugin` handles `.modl` packaging
-- The module is scoped using standard Ignition module scopes (C/D/G)
+- All Ignition SDK dependencies use `compileOnly` scope — they are supplied by the Ignition runtime
+- The `io.ia.sdk.modl` Gradle plugin handles `.modl` packaging (see root `build.gradle.kts`)
+- The module is scoped using standard Ignition module scopes (C/D/G), declared in `ignitionModule.projectScopes` in the root `build.gradle.kts`
+- `simple-orm` (SimpleORM) and the legacy `PersistentRecord` classes in `gateway/.../localdb/persistence` are still present in the 8.3 SDK jar specifically to support migration strategies (see `records/legacy/`) — they are not otherwise part of the active runtime path

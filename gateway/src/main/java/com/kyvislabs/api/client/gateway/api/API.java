@@ -1,7 +1,10 @@
 package com.kyvislabs.api.client.gateway.api;
 
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.health.HealthCheck;
 import com.inductiveautomation.ignition.common.model.values.QualityCode;
 import com.inductiveautomation.ignition.common.tags.model.TagPath;
+import com.inductiveautomation.ignition.gateway.metrics.MetricBuilder;
 import com.inductiveautomation.ignition.gateway.model.GatewayContext;
 import com.inductiveautomation.ignition.gateway.secrets.Plaintext;
 import com.inductiveautomation.ignition.gateway.secrets.Secret;
@@ -52,6 +55,50 @@ public class API implements WriteHandler {
         this.webhooks = new Webhooks(this);
         this.functions = new Functions(this);
         loadConfiguration();
+        registerMetrics();
+    }
+
+    /**
+     * Registers per-instance health checks/gauges so the ConfigurationManager REST routes surface live
+     * status in the generic list/find responses (see ResourceTypes.buildStatusDelegate). Mirrors the
+     * MetricBuilder/HealthCheckRegistry pattern used elsewhere for per-instance resource status.
+     */
+    private void registerMetrics() {
+        getGatewayContext().getHealthCheckRegistry().register(getMetricName(name, "status"), new HealthCheck() {
+            @Override
+            protected Result check() {
+                APIStatus s = getStatus();
+                return s == APIStatus.RUNNING ? Result.healthy(s.getDisplay()) : Result.unhealthy(s.getDisplay());
+            }
+        });
+
+        MetricRegistry metricRegistry = getGatewayContext().getMetricRegistry();
+        new MetricBuilder().registry(metricRegistry).name(getMetricName(name, "functions.running")).description("Functions Running").getOrAddGauge(() -> functions.getStatusCounts().running());
+        new MetricBuilder().registry(metricRegistry).name(getMetricName(name, "functions.unknown")).description("Functions Unknown").getOrAddGauge(() -> functions.getStatusCounts().unknown());
+        new MetricBuilder().registry(metricRegistry).name(getMetricName(name, "functions.failed")).description("Functions Failed").getOrAddGauge(() -> functions.getStatusCounts().failed());
+        new MetricBuilder().registry(metricRegistry).name(getMetricName(name, "webhooks.running")).description("Webhooks Running").getOrAddGauge(() -> webhooks.getStatusCounts().running());
+        new MetricBuilder().registry(metricRegistry).name(getMetricName(name, "webhooks.waiting")).description("Webhooks Waiting").getOrAddGauge(() -> webhooks.getStatusCounts().waiting());
+        new MetricBuilder().registry(metricRegistry).name(getMetricName(name, "webhooks.failed")).description("Webhooks Failed").getOrAddGauge(() -> webhooks.getStatusCounts().failed());
+    }
+
+    private void unregisterMetrics() {
+        getGatewayContext().getHealthCheckRegistry().unregister(getMetricName(name, "status"));
+
+        MetricRegistry metricRegistry = getGatewayContext().getMetricRegistry();
+        metricRegistry.remove(getMetricName(name, "functions.running"));
+        metricRegistry.remove(getMetricName(name, "functions.unknown"));
+        metricRegistry.remove(getMetricName(name, "functions.failed"));
+        metricRegistry.remove(getMetricName(name, "webhooks.running"));
+        metricRegistry.remove(getMetricName(name, "webhooks.waiting"));
+        metricRegistry.remove(getMetricName(name, "webhooks.failed"));
+    }
+
+    /**
+     * Metric name pattern shared with ResourceTypes.buildStatusDelegate, which templates the
+     * instance name in with "%s" - keep the segment order/keys in sync between the two.
+     */
+    public static String getMetricName(String apiName, String metric) {
+        return MetricRegistry.name("com.kyvislabs.api.client.api", apiName, metric);
     }
 
     private void loadConfiguration() {
@@ -146,6 +193,20 @@ public class API implements WriteHandler {
         logger.debug("Shutting down");
         webhooks.shutdown();
         functions.shutdown();
+        try {
+            unregisterMetrics();
+        } catch (Throwable ex) {
+            logger.error("Error unregistering metrics", ex);
+        }
+    }
+
+    /**
+     * Called when this API's resource has been permanently deleted (as opposed to shutdown() being
+     * called as part of a normal edit/reload cycle) - writes a final Status tag value so it doesn't
+     * just freeze at whatever it last was, then shuts down normally. Must be called before shutdown().
+     */
+    public void markDeleted() {
+        setStatus(APIStatus.DELETED);
     }
 
     public synchronized String getName() {
@@ -288,7 +349,8 @@ public class API implements WriteHandler {
         TRIAL_EXPIRED("Trial Expired"),
         NEEDS_AUTHORIZATION("Needs Authorization"),
         NEEDS_2FA_CODE("Needs 2FA Code"),
-        RUNNING("Running");
+        RUNNING("Running"),
+        DELETED("Deleted");
 
         private final String display;
 

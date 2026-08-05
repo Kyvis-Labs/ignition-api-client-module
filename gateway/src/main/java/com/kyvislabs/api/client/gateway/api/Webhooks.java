@@ -36,14 +36,12 @@ public class Webhooks implements YamlParser {
         }
     }
 
-    public String getStatus() {
+    public record WebhooksStatus(int running, int waiting, int failed) {}
+
+    public WebhooksStatus getStatusCounts() {
         int running = 0;
         int waiting = 0;
         int failed = 0;
-
-        if (webhooks.size() == 0) {
-            return "";
-        }
 
         for (Webhook webhook : webhooks.values()) {
             if (webhook.getCheck().getStatus().equals(Function.FunctionStatus.SUCCESS)) {
@@ -63,12 +61,7 @@ public class Webhooks implements YamlParser {
             }
         }
 
-        String failedStr = String.format("%d failed", failed);
-        if (failed > 0) {
-            failedStr = String.format("<font color=red>%d failed</font>", failed);
-        }
-
-        return String.format("%d running<br>%s<br>%d waiting", running, failedStr, waiting);
+        return new WebhooksStatus(running, waiting, failed);
     }
 
     public Webhook getWebhook(String name) throws APIException {

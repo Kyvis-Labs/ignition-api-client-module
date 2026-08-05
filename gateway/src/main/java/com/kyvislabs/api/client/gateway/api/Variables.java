@@ -17,7 +17,9 @@ public class Variables implements YamlParser, VariableStore {
     private Logger logger;
     private API api;
     private List<String> configurationVariables;
-    // In-memory variable store: key → plaintext value
+    // In-memory variable store: key → plaintext value. A HashMap (not ConcurrentHashMap) because a
+    // declared-but-unset variable is legitimately null, and ConcurrentHashMap.put() throws NPE on a
+    // null value.
     private Map<String, String> variableValues;
     // Variable metadata: key → metadata
     private Map<String, VariableMeta> variableMeta;
@@ -26,7 +28,7 @@ public class Variables implements YamlParser, VariableStore {
         this.logger = LoggerFactory.getLogger(String.format("API.%s.Variables", api.getName()));
         this.api = api;
         this.configurationVariables = Collections.synchronizedList(new ArrayList<>());
-        this.variableValues = new ConcurrentHashMap<>();
+        this.variableValues = Collections.synchronizedMap(new HashMap<>());
         this.variableMeta = new ConcurrentHashMap<>();
 
         // Load variables from embedded APIResource
@@ -141,19 +143,21 @@ public class Variables implements YamlParser, VariableStore {
      */
     private void persist() {
         List<APIResource.APIVariable> persistedVariables = new ArrayList<>();
-        for (Map.Entry<String, String> entry : variableValues.entrySet()) {
-            String key = entry.getKey();
-            if (!configurationVariables.contains(key) && !key.startsWith("auth-")) {
-                continue;
+        synchronized (variableValues) {
+            for (Map.Entry<String, String> entry : variableValues.entrySet()) {
+                String key = entry.getKey();
+                if (!configurationVariables.contains(key) && !key.startsWith("auth-")) {
+                    continue;
+                }
+                VariableMeta meta = variableMeta.getOrDefault(key, new VariableMeta(false, false, false));
+                persistedVariables.add(new APIResource.APIVariable(
+                        key,
+                        toSecretConfig(entry.getValue()),
+                        meta.required(),
+                        meta.sensitive(),
+                        meta.hidden()
+                ));
             }
-            VariableMeta meta = variableMeta.getOrDefault(key, new VariableMeta(false, false, false));
-            persistedVariables.add(new APIResource.APIVariable(
-                    key,
-                    toSecretConfig(entry.getValue()),
-                    meta.required(),
-                    meta.sensitive(),
-                    meta.hidden()
-            ));
         }
 
         api.persistResource(current -> new APIResource(
@@ -170,18 +174,43 @@ public class Variables implements YamlParser, VariableStore {
         }
     }
 
+    /**
+     * value is only populated for non-sensitive variables - sensitive ones never cross the REST
+     * boundary as plaintext, only hasValue (matches the "change password" masking UX used elsewhere).
+     */
+    public record VariableInfo(String key, boolean required, boolean sensitive, boolean hidden, boolean hasValue, String value) {}
+
+    /**
+     * Snapshot of all known variables (config-declared, auth-, and any other runtime ones) for
+     * display in the Variables drawer. Split into editable ("required && !hidden", matching the old
+     * 8.1 Wicket panel's user-facing section) vs read-only by the caller.
+     */
+    public synchronized List<VariableInfo> getAllVariables() {
+        List<VariableInfo> result = new ArrayList<>();
+        synchronized (variableValues) {
+            for (String key : variableValues.keySet()) {
+                VariableMeta meta = variableMeta.getOrDefault(key, new VariableMeta(false, false, false));
+                String value = variableValues.get(key);
+                result.add(new VariableInfo(key, meta.required(), meta.sensitive(), meta.hidden(), value != null, meta.sensitive() ? null : value));
+            }
+        }
+        return result;
+    }
+
     public boolean initComplete() {
         boolean valid = true;
-        for (Map.Entry<String, String> entry : variableValues.entrySet()) {
-            String key = entry.getKey();
-            String value = entry.getValue();
-            if (configurationVariables.contains(key)) {
-                VariableMeta meta = variableMeta.get(key);
-                if (meta != null && meta.required() && value == null) {
-                    valid = false;
+        synchronized (variableValues) {
+            for (Map.Entry<String, String> entry : variableValues.entrySet()) {
+                String key = entry.getKey();
+                String value = entry.getValue();
+                if (configurationVariables.contains(key)) {
+                    VariableMeta meta = variableMeta.get(key);
+                    if (meta != null && meta.required() && value == null) {
+                        valid = false;
+                    }
                 }
+                // Non-config, non-auth variables are simply kept in memory (no DB delete needed)
             }
-            // Non-config, non-auth variables are simply kept in memory (no DB delete needed)
         }
         return valid;
     }

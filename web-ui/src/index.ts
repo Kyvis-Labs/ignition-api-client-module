@@ -1,1 +1,1 @@
-export { default as APIs } from './pages/APIs/APIs';
+export { default as APIs } from './pages/APIs/APIsPage';

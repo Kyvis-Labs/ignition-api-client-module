@@ -2,6 +2,7 @@ package com.kyvislabs.api.client.gateway.records;
 
 import com.inductiveautomation.ignition.common.resourcecollection.ResourceType;
 import com.inductiveautomation.ignition.gateway.config.ResourceTypeMeta;
+import com.kyvislabs.api.client.gateway.api.API;
 
 public class ResourceTypes {
 
@@ -18,5 +19,15 @@ public class ResourceTypes {
                             .configSchema(APIResource.class)
                             .openApiGroupName("API Client")
                             .openApiTagName("api")
-                    ).build();
+                    )
+                    .buildStatusDelegate(status -> status
+                            .instanceHealthCheck("status", API.getMetricName("%s", "status"))
+                            .instanceMetric("functionsRunning", API.getMetricName("%s", "functions.running"))
+                            .instanceMetric("functionsUnknown", API.getMetricName("%s", "functions.unknown"))
+                            .instanceMetric("functionsFailed", API.getMetricName("%s", "functions.failed"))
+                            .instanceMetric("webhooksRunning", API.getMetricName("%s", "webhooks.running"))
+                            .instanceMetric("webhooksWaiting", API.getMetricName("%s", "webhooks.waiting"))
+                            .instanceMetric("webhooksFailed", API.getMetricName("%s", "webhooks.failed"))
+                    )
+                    .build();
 }

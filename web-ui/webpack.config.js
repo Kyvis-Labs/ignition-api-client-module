@@ -25,6 +25,10 @@ module.exports = {
     'react': 'react',
     'react-dom': 'react-dom',
     'react-redux': 'react-redux',
-    '@inductiveautomation/ignition-web-ui': '@inductiveautomation/ignition-web-ui'
+    'react-hook-form': 'react-hook-form',
+    '@hookform/resolvers': '@hookform/resolvers',
+    '@hookform/resolvers/yup': '@hookform/resolvers/yup',
+    '@inductiveautomation/ignition-web-ui': '@inductiveautomation/ignition-web-ui',
+    '@inductiveautomation/ignition-icons': '@inductiveautomation/ignition-icons'
   }
 };

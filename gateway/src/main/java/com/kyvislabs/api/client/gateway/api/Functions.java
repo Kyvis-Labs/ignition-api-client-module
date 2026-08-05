@@ -35,7 +35,9 @@ public class Functions implements YamlParser {
         }
     }
 
-    public String getStatus() {
+    public record FunctionsStatus(int running, int unknown, int failed) {}
+
+    public FunctionsStatus getStatusCounts() {
         int running = 0;
         int unknown = 0;
         int failed = 0;
@@ -49,12 +51,7 @@ public class Functions implements YamlParser {
             }
         }
 
-        String failedStr = String.format("%d failed", failed);
-        if (failed > 0) {
-            failedStr = String.format("<font color=red>%d failed</font>", failed);
-        }
-
-        return String.format("%d running<br>%s<br>%d unknown", running, failedStr, unknown);
+        return new FunctionsStatus(running, unknown, failed);
     }
 
     public boolean functionExists(String name) {
