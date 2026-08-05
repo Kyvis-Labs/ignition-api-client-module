@@ -1,27 +1,32 @@
 import React, { useState, useEffect } from 'react';
+import { useSelector } from 'react-redux';
+import { APIConfig, APIListItem, DEFAULT_API_CONFIG } from './APIForm.types';
 
-interface APIItem {
-  name: string;
-  enabled: boolean;
-  configuration: string;
-}
-
-const BASE_URL = '/data/api-client/api';
+// Matches ResourceTypes.MODULE_ID + the "api" typeId in gateway/.../records/ResourceTypes.java.
+// The generic ConfigurationManager REST routes are always /data/api/v1/resources/... - there is
+// no module-specific path, so this must line up exactly with the Java-side ResourceType.
+const RESOURCE_PATH = 'com.kyvislabs.api.client/api';
+const LIST_URL = `/data/api/v1/resources/list/${RESOURCE_PATH}`;
+const FIND_URL = `/data/api/v1/resources/find/${RESOURCE_PATH}`;
+const RESOURCE_URL = `/data/api/v1/resources/${RESOURCE_PATH}`;
 
 export default function APIs() {
-  const [apis, setApis] = useState<APIItem[]>([]);
+  const [apis, setApis] = useState<APIListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingApi, setEditingApi] = useState<string | null>(null);
 
+  const csrfToken = useSelector((state: any) => state?.userSession?.csrfToken);
+
   const fetchApis = async () => {
     try {
       setLoading(true);
-      const response = await fetch(BASE_URL);
+      const response = await fetch(`${LIST_URL}?limit=100&offset=0`);
       if (!response.ok) throw new Error('Failed to fetch APIs');
       const data = await response.json();
-      setApis(data.resources || []);
+      setApis(data.items || []);
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -31,10 +36,14 @@ export default function APIs() {
 
   useEffect(() => { fetchApis(); }, []);
 
-  const handleDelete = async (name: string) => {
-    if (!confirm(`Delete API "${name}"?`)) return;
+  const handleDelete = async (api: APIListItem) => {
+    if (!confirm(`Delete API "${api.name}"?`)) return;
     try {
-      await fetch(`${BASE_URL}/${name}`, { method: 'DELETE' });
+      const response = await fetch(`${RESOURCE_URL}/${encodeURIComponent(api.name)}/${encodeURIComponent(String(api.signature))}`, {
+        method: 'DELETE',
+        headers: { 'X-CSRF-Token': csrfToken },
+      });
+      if (!response.ok) throw new Error('Failed to delete API');
       fetchApis();
     } catch (err) {
       setError('Failed to delete API');
@@ -67,11 +76,11 @@ export default function APIs() {
               <tr key={api.name}>
                 <td style={{ padding: '8px', borderBottom: '1px solid #eee' }}>{api.name}</td>
                 <td style={{ padding: '8px', borderBottom: '1px solid #eee' }}>
-                  {api.enabled ? 'Yes' : 'No'}
+                  {api.config?.enabled ? 'Yes' : 'No'}
                 </td>
                 <td style={{ padding: '8px', borderBottom: '1px solid #eee', textAlign: 'right' }}>
                   <button onClick={() => setEditingApi(api.name)} style={{ marginRight: 8 }}>Edit</button>
-                  <button onClick={() => handleDelete(api.name)}>Delete</button>
+                  <button onClick={() => handleDelete(api)}>Delete</button>
                 </td>
               </tr>
             ))}
@@ -81,6 +90,7 @@ export default function APIs() {
 
       {showAddModal && (
         <APIAddModal
+          csrfToken={csrfToken}
           onClose={() => setShowAddModal(false)}
           onSave={() => { setShowAddModal(false); fetchApis(); }}
         />
@@ -89,6 +99,7 @@ export default function APIs() {
       {editingApi && (
         <APIEditDrawer
           apiName={editingApi}
+          csrfToken={csrfToken}
           onClose={() => setEditingApi(null)}
           onSave={() => { setEditingApi(null); fetchApis(); }}
         />
@@ -98,11 +109,12 @@ export default function APIs() {
 }
 
 interface APIAddModalProps {
+  csrfToken: string;
   onClose: () => void;
   onSave: () => void;
 }
 
-function APIAddModal({ onClose, onSave }: APIAddModalProps) {
+function APIAddModal({ csrfToken, onClose, onSave }: APIAddModalProps) {
   const [name, setName] = useState('');
   const [enabled, setEnabled] = useState(true);
   const [configuration, setConfiguration] = useState('');
@@ -114,10 +126,11 @@ function APIAddModal({ onClose, onSave }: APIAddModalProps) {
     if (!configuration.trim()) { setError('Configuration is required'); return; }
     setSaving(true);
     try {
-      const response = await fetch(`${BASE_URL}/${name}`, {
+      const config: APIConfig = { ...DEFAULT_API_CONFIG, enabled, configuration };
+      const response = await fetch(RESOURCE_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled, configuration, variables: [], certificate: null })
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify([{ name, config }]),
       });
       if (!response.ok) throw new Error('Failed to create API');
       onSave();
@@ -163,11 +176,13 @@ function APIAddModal({ onClose, onSave }: APIAddModalProps) {
 
 interface APIEditDrawerProps {
   apiName: string;
+  csrfToken: string;
   onClose: () => void;
   onSave: () => void;
 }
 
-function APIEditDrawer({ apiName, onClose, onSave }: APIEditDrawerProps) {
+function APIEditDrawer({ apiName, csrfToken, onClose, onSave }: APIEditDrawerProps) {
+  const [resource, setResource] = useState<APIListItem | null>(null);
   const [enabled, setEnabled] = useState(true);
   const [configuration, setConfiguration] = useState('');
   const [loading, setLoading] = useState(true);
@@ -175,23 +190,31 @@ function APIEditDrawer({ apiName, onClose, onSave }: APIEditDrawerProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${BASE_URL}/${apiName}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setEnabled(data.enabled ?? true);
-        setConfiguration(data.configuration ?? '');
+    fetch(`${FIND_URL}/${encodeURIComponent(apiName)}`)
+      .then((r) => {
+        if (!r.ok) throw new Error('Failed to load API');
+        return r.json();
+      })
+      .then((data: APIListItem) => {
+        setResource(data);
+        setEnabled(data.config?.enabled ?? true);
+        setConfiguration(data.config?.configuration ?? '');
         setLoading(false);
       })
       .catch(() => { setError('Failed to load API'); setLoading(false); });
   }, [apiName]);
 
   const handleSave = async () => {
+    if (!resource) return;
     setSaving(true);
     try {
-      const response = await fetch(`${BASE_URL}/${apiName}`, {
+      // Preserve everything else on the config (variables, certificate, webhookKeys) - only
+      // enabled/configuration are edited here, but a PUT replaces the whole resource.
+      const config: APIConfig = { ...resource.config, enabled, configuration };
+      const response = await fetch(RESOURCE_URL, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled, configuration })
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify([{ name: resource.name, signature: resource.signature, config }]),
       });
       if (!response.ok) throw new Error('Failed to update API');
       onSave();

@@ -8,17 +8,40 @@ export interface APIVariable {
 
 export interface APICertificate {
   certificate: string;
-  privateKey: string;
+  privateKey: unknown;
 }
 
-export interface APIFormData {
+export interface APIWebhookKey {
+  webhookName: string;
+  key: string;
+  id: string | null;
+  ttl: number | null;
+}
+
+// Mirrors gateway/.../records/APIResource.java - the resource's typed config payload,
+// nested under "config" in the generic ConfigurationManager REST resource shape.
+export interface APIConfig {
   enabled: boolean;
   configuration: string;
   variables: APIVariable[];
   certificate: APICertificate | null;
+  webhookKeys: APIWebhookKey[];
 }
 
-export interface APIResource {
+// The generic resource envelope returned by /data/api/v1/resources/{list,find}/... -
+// name/description/signature are resource-level metadata, the actual APIResource fields
+// live under "config".
+export interface APIListItem {
   name: string;
-  data: APIFormData;
+  description?: string;
+  signature: unknown;
+  config: APIConfig;
 }
+
+export const DEFAULT_API_CONFIG: APIConfig = {
+  enabled: true,
+  configuration: '',
+  variables: [],
+  certificate: null,
+  webhookKeys: [],
+};

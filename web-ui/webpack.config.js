@@ -24,6 +24,7 @@ module.exports = {
   externals: {
     'react': 'react',
     'react-dom': 'react-dom',
+    'react-redux': 'react-redux',
     '@inductiveautomation/ignition-web-ui': '@inductiveautomation/ignition-web-ui'
   }
 };
