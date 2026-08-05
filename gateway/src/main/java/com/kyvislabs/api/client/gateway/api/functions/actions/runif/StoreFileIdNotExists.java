@@ -5,6 +5,7 @@ import com.kyvislabs.api.client.common.scripting.AbstractScriptFunctionsScriptMo
 import com.kyvislabs.api.client.gateway.api.ValueString;
 import com.kyvislabs.api.client.gateway.api.functions.Function;
 import com.kyvislabs.api.client.gateway.api.functions.actions.RunIf;
+import com.kyvislabs.api.client.gateway.api.functions.actions.actions.StoreFileAction;
 import com.kyvislabs.api.client.gateway.api.interfaces.VariableStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,19 +57,12 @@ public class StoreFileIdNotExists extends RunIf {
         File moduleDir = new File(dataDir, "modules/" + AbstractScriptFunctionsScriptModule.MODULE_ID);
         File apiDir = new File(moduleDir, function.getApi().getName());
 
-        // Check if any .token file in apiDir maps to a file with resolvedFileName
-        boolean fileExists = false;
-        if (apiDir.exists() && apiDir.isDirectory()) {
-            File[] extensions = apiDir.listFiles((dir, name) -> !name.endsWith(".token"));
-            if (extensions != null) {
-                for (File f : extensions) {
-                    if (f.getName().startsWith(resolvedFileName)) {
-                        fileExists = true;
-                        break;
-                    }
-                }
-            }
-        }
+        // fileId (not fileName) is the caller's stable unique identifier for the remote file, so
+        // existence must be checked by the id marker StoreFileAction writes alongside the file -
+        // matching on fileName alone would misfire if the same fileId is ever templated to a
+        // different fileName, or a different fileId happens to share a fileName prefix.
+        File idFile = new File(apiDir, StoreFileAction.getIdMarkerFileName(resolvedFileId));
+        boolean fileExists = idFile.exists();
 
         boolean ret = !fileExists;
         logger.debug("Checking for file [fileId=" + resolvedFileId + ", fileName=" + resolvedFileName + ", proceed=" + ret + "]");

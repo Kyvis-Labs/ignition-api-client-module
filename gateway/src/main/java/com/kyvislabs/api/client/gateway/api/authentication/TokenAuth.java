@@ -13,7 +13,8 @@ import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -23,8 +24,13 @@ public class TokenAuth extends AbstractAuthType {
     public static final String VARIABLE_PASSWORD = "authType-token-password";
     public static final String VARIABLE_EXPIRATION = "authType-token-expiration";
 
+    // DateTimeFormatter is immutable and thread-safe, unlike SimpleDateFormat. hasExpired() and
+    // authenticate() can both run concurrently from different functions' scheduled executor
+    // threads sharing this one TokenAuth instance, so a mutable SimpleDateFormat field here was a
+    // real (if rare) source of corrupted parses/formats under concurrent access.
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
     private Logger logger;
-    private SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private ValueString url;
     private ValueString usernameKey;
     private ValueString passwordKey;
@@ -82,9 +88,10 @@ public class TokenAuth extends AbstractAuthType {
         String expirationDateStr = api.getVariables().getVariable(VARIABLE_EXPIRATION);
         try {
             if (expirationDateStr != null) {
-                Date expirationDate = df.parse(expirationDateStr);
-                logger.debug("Expiration date: " + expirationDateStr + " (" + expirationDate.after(new Date()) + ")");
-                if (expirationDate.after(new Date())) {
+                LocalDateTime expirationDate = LocalDateTime.parse(expirationDateStr, DATE_FORMATTER);
+                boolean stillValid = expirationDate.isAfter(LocalDateTime.now());
+                logger.debug("Expiration date: " + expirationDateStr + " (" + stillValid + ")");
+                if (stillValid) {
                     return false;
                 }
             }
@@ -168,10 +175,7 @@ public class TokenAuth extends AbstractAuthType {
                 }
 
                 if (getExpiresIn() != null) {
-                    Calendar cal = Calendar.getInstance();
-                    cal.setTime(new Date());
-                    cal.add(Calendar.SECOND, getExpiresIn());
-                    String expiration = df.format(cal.getTime());
+                    String expiration = LocalDateTime.now().plusSeconds(getExpiresIn()).format(DATE_FORMATTER);
                     api.getVariables().setVariable(VARIABLE_EXPIRATION, expiration);
                 }
             } catch (Throwable ex) {

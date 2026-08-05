@@ -25,6 +25,8 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 public class TagManager {
@@ -34,6 +36,13 @@ public class TagManager {
     private GatewayContext gatewayContext;
     private ManagedTagProvider managedTagProvider;
     private TagProvider tagProvider;
+
+    // Tag creation is idempotent - once a path is confirmed to exist it stays that way (barring
+    // manual deletion, which goes through removeTag() below and evicts it here). Without this,
+    // tagExists()'s blocking readAsync().get() round-trip runs again on every single function
+    // execution for every configured tag/UDT, even though after the first run the answer is
+    // always "yes" - a real bottleneck for functions on short poll intervals with many tags.
+    private final Set<String> knownTagPaths = ConcurrentHashMap.newKeySet();
 
     public void init(GatewayContext gatewayContext) {
         this.gatewayContext = gatewayContext;
@@ -67,11 +76,17 @@ public class TagManager {
     }
 
     public boolean tagExists(String tagPath) {
+        tagPath = fixTagPath(tagPath);
+
+        if (knownTagPaths.contains(tagPath)) {
+            return true;
+        }
+
         try {
-            tagPath = fixTagPath(tagPath);
             QualifiedValue value = readTag(tagPath);
             logger.debug("Checking if tag exists '" + tagPath + "' with value '" + value.toString() + "'");
             if (value.getQuality().getCode() != QualityCode.Bad_NotFound.getCode()) {
+                knownTagPaths.add(tagPath);
                 return true;
             }
         } catch (Throwable ex) {
@@ -118,6 +133,9 @@ public class TagManager {
         }
         if (finalUdts.size() > 0) {
             tagProvider.saveTagConfigsAsync(finalUdts, policy).get();
+            for (TagConfiguration udt : finalUdts) {
+                knownTagPaths.add(fixTagPath(udt.getPath().toStringFull()));
+            }
         }
     }
 
@@ -143,6 +161,7 @@ public class TagManager {
         if (!tagExists(tagPath)) {
             logger.debug("Configuring tag '" + tagPath + "' with " + props.toString());
             managedTagProvider.configureTag(tagPath, props);
+            knownTagPaths.add(tagPath);
         }
     }
 
@@ -167,6 +186,7 @@ public class TagManager {
         if (tagExists(tagPath)) {
             logger.debug("Removing tag '" + tagPath + "'");
             managedTagProvider.removeTag(tagPath);
+            knownTagPaths.remove(tagPath);
         }
     }
 

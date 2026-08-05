@@ -82,6 +82,15 @@ public class StoreFileAction extends Action {
         return RandomStringUtils.randomAlphanumeric(20);
     }
 
+    // fileId is the caller's stable, unique identifier for the remote file (per the README), which
+    // is independent of fileName - fileName is just how it's named on disk and can be templated
+    // from other response fields. storeFileIdNotExists needs to check "have we already stored the
+    // file for this id" without caring what it was named, so we key a marker file on a sanitized
+    // fileId rather than matching on fileName prefixes on disk.
+    public static String getIdMarkerFileName(String fileId) {
+        return fileId.replaceAll("[^a-zA-Z0-9._-]", "_") + ".id";
+    }
+
     private void removeExistingTokenFiles(Path apiDir, String fullFileName) {
         try (DirectoryStream<Path> tokenFiles = Files.newDirectoryStream(apiDir, "*.token")) {
             for (Path tokenFile : tokenFiles) {
@@ -129,6 +138,10 @@ public class StoreFileAction extends Action {
             // This replaces the DB record for StoreFileServlet lookup
             File tokenFile = new File(apiDir, accessToken + ".token");
             Files.writeString(tokenFile.toPath(), fullFileName);
+
+            // Write an id marker file so storeFileIdNotExists can check existence by fileId
+            File idFile = new File(apiDir, getIdMarkerFileName(fileId));
+            Files.writeString(idFile.toPath(), fullFileName);
 
             function.getApi().getTagManager().tagUpdate(tagPath + "/FileURL", getServletPath(accessToken));
         } catch (Throwable ex) {
