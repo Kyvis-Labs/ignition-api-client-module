@@ -11,6 +11,7 @@ import com.inductiveautomation.ignition.gateway.config.migration.MigrationLog;
 import com.kyvislabs.api.client.gateway.records.legacy.LegacyAPICertificateRecord;
 import com.kyvislabs.api.client.gateway.records.legacy.LegacyAPIRecord;
 import com.kyvislabs.api.client.gateway.records.legacy.LegacyAPIVariableRecord;
+import com.kyvislabs.api.client.gateway.records.legacy.LegacyAPIWebhookRecord;
 import com.inductiveautomation.ignition.gateway.secrets.Plaintext;
 import com.inductiveautomation.ignition.gateway.secrets.SecretConfig;
 import simpleorm.dataset.SQuery;
@@ -28,14 +29,15 @@ import java.util.UUID;
  *   - API (Id, Name, Enabled, Configuration YAML)
  *   - APIVariable (Id, APIId FK, Key, Value encoded, Required, Sensitive, Hidden)
  *   - APICertificate (Id, APIId FK, Certificate, PrivateKey)
+ *   - APIWebhook (Id, APIId FK, Name, Key, UId, Url, TTL)
  *
- * New schema: APIResource record (embedded variables + certificate)
+ * New schema: APIResource record (embedded variables + certificate + webhook keys)
  */
 public class APIMigrationStrategy implements IdbMigrationStrategy {
 
     @Override
     public List<SRecordMeta<? extends SRecordInstance>> getRecordMetas() {
-        return List.of(LegacyAPIRecord.META, LegacyAPIVariableRecord.META, LegacyAPICertificateRecord.META);
+        return List.of(LegacyAPIRecord.META, LegacyAPIVariableRecord.META, LegacyAPICertificateRecord.META, LegacyAPIWebhookRecord.META);
     }
 
     @Override
@@ -99,12 +101,27 @@ public class APIMigrationStrategy implements IdbMigrationStrategy {
             }
         }
 
+        // Load webhook keys for this API
+        List<APIResource.APIWebhookKey> webhookKeys = new ArrayList<>();
+        List<LegacyAPIWebhookRecord> oldWebhooks = context.getPersistenceSession().query(
+                new SQuery<>(LegacyAPIWebhookRecord.META).eq(LegacyAPIWebhookRecord.APIId, oldApi.getId()));
+
+        for (LegacyAPIWebhookRecord oldWebhook : oldWebhooks) {
+            webhookKeys.add(new APIResource.APIWebhookKey(
+                    oldWebhook.getName(),
+                    oldWebhook.getKey(),
+                    oldWebhook.getUId(),
+                    oldWebhook.getTTL() != null ? oldWebhook.getTTL().getTime() : null
+            ));
+        }
+
         // Build the new resource
         APIResource resource = new APIResource(
                 oldApi.isEnabled(),
                 oldApi.getConfiguration() != null ? oldApi.getConfiguration() : "",
                 variables,
-                certificate
+                certificate,
+                webhookKeys
         );
 
         ResourceBuilder builder = Resource.newBuilder()

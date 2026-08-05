@@ -1,5 +1,6 @@
 package com.kyvislabs.api.client.gateway.managers;
 
+import com.inductiveautomation.ignition.common.resourcecollection.PushException;
 import com.inductiveautomation.ignition.common.sqltags.model.types.DataType;
 import com.inductiveautomation.ignition.common.tags.config.CollisionPolicy;
 import com.inductiveautomation.ignition.gateway.config.DecodedResource;
@@ -9,6 +10,12 @@ import com.inductiveautomation.ignition.gateway.config.ResourceTypeMeta;
 import com.inductiveautomation.ignition.gateway.model.GatewayContext;
 import com.kyvislabs.api.client.common.exceptions.APIException;
 import com.kyvislabs.api.client.gateway.api.API;
+import com.kyvislabs.api.client.gateway.api.authentication.OAuth2;
+import com.kyvislabs.api.client.gateway.api.authentication.OAuth2Servlet;
+import com.kyvislabs.api.client.gateway.api.functions.actions.actions.StoreFileAction;
+import com.kyvislabs.api.client.gateway.api.functions.actions.actions.StoreFileServlet;
+import com.kyvislabs.api.client.gateway.api.webhooks.Webhook;
+import com.kyvislabs.api.client.gateway.api.webhooks.WebhookServlet;
 import com.kyvislabs.api.client.gateway.records.APIResource;
 import com.kyvislabs.api.client.gateway.records.ResourceTypes;
 import org.slf4j.Logger;
@@ -21,6 +28,7 @@ import java.nio.file.Paths;
 import java.security.KeyStore;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.UnaryOperator;
 
 public class APIManager {
     private final Logger logger = LoggerFactory.getLogger("API.Manager");
@@ -66,6 +74,10 @@ public class APIManager {
         logger.debug("Starting up");
         tagManager.startup();
         registerUDTs();
+
+        gatewayContext.getWebResourceManager().addServlet(OAuth2.AUTH_TYPE, OAuth2Servlet.class);
+        gatewayContext.getWebResourceManager().addServlet(Webhook.SERVLET_PATH, WebhookServlet.class);
+        gatewayContext.getWebResourceManager().addServlet(StoreFileAction.SERVLET_PATH, StoreFileServlet.class);
 
         resourceHandler = new APIResourceHandler(gatewayContext, ResourceTypes.API_RESOURCE_TYPE_META);
         resourceHandler.startup();
@@ -155,6 +167,32 @@ public class APIManager {
             return apiConfigurations.get(name);
         }
         throw new APIException("API '" + name + "' doesn't exist");
+    }
+
+    /**
+     * Persists a change to an API's resource (e.g. an updated variable or webhook key) back to the
+     * ConfigurationManager, so it survives a gateway restart. This will asynchronously trigger
+     * {@link APIResourceHandler#onResourceUpdated}, which reloads the affected API from the new resource.
+     */
+    public void updateResource(String name, UnaryOperator<APIResource> mutator) {
+        try {
+            resourceHandler.findResource(name).ifPresentOrElse(
+                    existing -> {
+                        APIResource updated = mutator.apply(existing.config());
+                        try {
+                            resourceHandler.modify(name, updated).exceptionally(ex -> {
+                                logger.error("Error persisting updated resource for '" + name + "'", ex);
+                                return null;
+                            });
+                        } catch (PushException ex) {
+                            logger.error("Error persisting updated resource for '" + name + "'", ex);
+                        }
+                    },
+                    () -> logger.warn("Cannot persist resource update for '" + name + "' - resource not found")
+            );
+        } catch (Throwable ex) {
+            logger.error("Error persisting updated resource for '" + name + "'", ex);
+        }
     }
 
     /**

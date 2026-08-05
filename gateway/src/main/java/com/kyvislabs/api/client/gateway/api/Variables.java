@@ -2,6 +2,7 @@ package com.kyvislabs.api.client.gateway.api;
 
 import com.inductiveautomation.ignition.gateway.secrets.Plaintext;
 import com.inductiveautomation.ignition.gateway.secrets.Secret;
+import com.inductiveautomation.ignition.gateway.secrets.SecretConfig;
 import com.kyvislabs.api.client.common.exceptions.APIException;
 import com.kyvislabs.api.client.gateway.api.interfaces.VariableStore;
 import com.kyvislabs.api.client.gateway.api.interfaces.YamlParser;
@@ -53,6 +54,7 @@ public class Variables implements YamlParser, VariableStore {
         if (variableValues.containsKey(name)) {
             logger.debug("Clearing variable '" + name + "'");
             variableValues.put(name, null);
+            persist();
         }
     }
 
@@ -100,6 +102,10 @@ public class Variables implements YamlParser, VariableStore {
     @Override
     public void setVariable(String name, Object value) {
         setVariable(name, null, null, null, value == null ? null : value.toString());
+        // This overload is the runtime entry point (auth flows, OAuth2 callback), unlike the
+        // config-driven overloads used by parse()/initializeVariables() - persist here so the
+        // change (e.g. a refreshed token) survives a gateway restart.
+        persist();
     }
 
     public void parse(Integer version, Map yamlMap) {
@@ -124,6 +130,43 @@ public class Variables implements YamlParser, VariableStore {
 
                 setVariable(name, required, hidden, sensitive, value);
             }
+        }
+    }
+
+    /**
+     * Persists the current variable values back into the API's ConfigurationManager resource so they
+     * survive a gateway restart. Only config-declared and "auth-" prefixed variables are persisted -
+     * matching the old (8.1) cleanup behavior in initComplete() - anything else stays in-memory only
+     * for the lifetime of this API instance.
+     */
+    private void persist() {
+        List<APIResource.APIVariable> persistedVariables = new ArrayList<>();
+        for (Map.Entry<String, String> entry : variableValues.entrySet()) {
+            String key = entry.getKey();
+            if (!configurationVariables.contains(key) && !key.startsWith("auth-")) {
+                continue;
+            }
+            VariableMeta meta = variableMeta.getOrDefault(key, new VariableMeta(false, false, false));
+            persistedVariables.add(new APIResource.APIVariable(
+                    key,
+                    toSecretConfig(entry.getValue()),
+                    meta.required(),
+                    meta.sensitive(),
+                    meta.hidden()
+            ));
+        }
+
+        api.persistResource(current -> new APIResource(
+                current.enabled(), current.configuration(), persistedVariables, current.certificate(), current.webhookKeys()
+        ));
+    }
+
+    private SecretConfig toSecretConfig(String plaintextValue) {
+        try (Plaintext plaintext = Plaintext.fromString(plaintextValue != null ? plaintextValue : "")) {
+            return SecretConfig.embedded(api.getGatewayContext().getSystemEncryptionService().encryptToJson(plaintext));
+        } catch (Throwable t) {
+            logger.error("Error encrypting variable value for persistence", t);
+            return null;
         }
     }
 

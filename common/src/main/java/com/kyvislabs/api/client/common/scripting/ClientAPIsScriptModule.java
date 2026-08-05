@@ -11,7 +11,9 @@ import org.python.core.PyDictionary;
  */
 public class ClientAPIsScriptModule extends AbstractScriptFunctionsScriptModule {
 
-    public static final ProtoRpcSerializer SERIALIZER = ProtoRpcSerializer.DEFAULT_INSTANCE;
+    public static final ProtoRpcSerializer SERIALIZER = ProtoRpcSerializer.newBuilder()
+            .addBinaryAdapter(PyDictionary.class, new ScriptFunctionsPyDictionaryProtoAdapter())
+            .build();
 
     private final APIsInterface rpc;
 

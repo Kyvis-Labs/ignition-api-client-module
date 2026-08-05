@@ -21,6 +21,7 @@ import org.yaml.snakeyaml.Yaml;
 import java.security.KeyStore;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.UnaryOperator;
 
 public class API implements WriteHandler {
     private static final Yaml yaml = new Yaml();
@@ -153,6 +154,14 @@ public class API implements WriteHandler {
 
     public synchronized APIResource getResource() {
         return resource;
+    }
+
+    /**
+     * Persists a change to this API's resource (e.g. an updated variable or webhook key) so it
+     * survives a gateway restart. Note this will trigger an async reload of this API instance.
+     */
+    public void persistResource(UnaryOperator<APIResource> mutator) {
+        apiManager.updateResource(name, mutator);
     }
 
     public synchronized String getStatusDisplay() {

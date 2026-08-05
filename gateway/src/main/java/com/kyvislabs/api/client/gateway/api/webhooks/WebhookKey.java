@@ -47,7 +47,7 @@ public class WebhookKey implements VariableStore, WriteHandler {
 
     public synchronized void setId(String id) {
         this.id = id;
-        // In 8.3, state is in-memory only — no DB persistence needed
+        webhook.persistWebhookKeys();
     }
 
     public synchronized String getUrl() {
@@ -203,8 +203,8 @@ public class WebhookKey implements VariableStore, WriteHandler {
         }
 
         try {
-            // In 8.3, remove from in-memory map only
             webhook.getWebhookKeys().remove(getKey());
+            webhook.persistWebhookKeys();
         } catch (Throwable ex) {
             webhook.getLogger().error(getKey() + ": Error removing webhook from map", ex);
             failed = true;

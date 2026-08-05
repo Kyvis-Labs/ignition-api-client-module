@@ -13,7 +13,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 
 public class StoreFileAction extends Action {
@@ -79,6 +82,22 @@ public class StoreFileAction extends Action {
         return RandomStringUtils.randomAlphanumeric(20);
     }
 
+    private void removeExistingTokenFiles(Path apiDir, String fullFileName) {
+        try (DirectoryStream<Path> tokenFiles = Files.newDirectoryStream(apiDir, "*.token")) {
+            for (Path tokenFile : tokenFiles) {
+                try {
+                    if (Files.readString(tokenFile).trim().equals(fullFileName)) {
+                        Files.delete(tokenFile);
+                    }
+                } catch (IOException ex) {
+                    logger.warn("Error inspecting token file '" + tokenFile + "'", ex);
+                }
+            }
+        } catch (IOException ex) {
+            logger.warn("Error listing token files in '" + apiDir + "'", ex);
+        }
+    }
+
     @Override
     public void handleResponse(VariableStore store, int statusCode, String contentType, String response) throws APIException {
         try {
@@ -101,6 +120,10 @@ public class StoreFileAction extends Action {
             }
 
             FileUtils.writeByteArrayToFile(new File(apiDir, fullFileName), fileBytes);
+
+            // Remove any previously-issued token file(s) for this fileName so old access URLs stop
+            // working and we don't accumulate one orphaned token file per execution.
+            removeExistingTokenFiles(apiDir.toPath(), fullFileName);
 
             // Write a token file that maps accessToken -> fullFileName
             // This replaces the DB record for StoreFileServlet lookup

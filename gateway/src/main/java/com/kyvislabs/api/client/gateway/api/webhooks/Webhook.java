@@ -5,13 +5,17 @@ import com.kyvislabs.api.client.common.exceptions.APIException;
 import com.kyvislabs.api.client.gateway.api.API;
 import com.kyvislabs.api.client.gateway.api.ValueString;
 import com.kyvislabs.api.client.gateway.api.functions.Function;
+import com.kyvislabs.api.client.gateway.records.APIResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 public class Webhook {
     public static final String SERVLET_PATH = "webhook";
@@ -34,6 +38,18 @@ public class Webhook {
         this.api = api;
         this.name = name;
         this.webhookKeys = new ConcurrentHashMap<>();
+
+        // Restore persisted webhook keys (issued to external systems) so they survive a restart
+        List<APIResource.APIWebhookKey> persisted = api.getResource().webhookKeys();
+        if (persisted != null) {
+            for (APIResource.APIWebhookKey webhookKey : persisted) {
+                if (name.equals(webhookKey.webhookName())) {
+                    logger.debug("Restoring persisted webhook key '" + webhookKey.key() + "'");
+                    Date ttlDate = webhookKey.ttl() != null ? new Date(webhookKey.ttl()) : null;
+                    webhookKeys.put(webhookKey.key(), new WebhookKey(this, webhookKey.key(), webhookKey.id(), getServletUrl(webhookKey.key()), ttlDate));
+                }
+            }
+        }
     }
 
     public void parse(Integer version, Map yamlMap) throws APIException {
@@ -112,7 +128,37 @@ public class Webhook {
         Date ttlDate = getWebhookTTLDate(ttl);
         WebhookKey webhookKeyObj = new WebhookKey(this, key, id, url, ttlDate);
         getWebhookKeys().put(key, webhookKeyObj);
+        persistWebhookKeys();
         return webhookKeyObj;
+    }
+
+    /**
+     * Persists this webhook's current keys back into the API's ConfigurationManager resource, so
+     * externally-issued webhook keys survive a gateway restart. Other webhooks' persisted keys are
+     * left untouched.
+     */
+    void persistWebhookKeys() {
+        List<APIResource.APIWebhookKey> thisWebhooksKeys = getWebhookKeys().values().stream()
+                .map(webhookKey -> new APIResource.APIWebhookKey(
+                        getName(),
+                        webhookKey.getKey(),
+                        webhookKey.getId(),
+                        webhookKey.getTtl() != null ? webhookKey.getTtl().getTime() : null
+                ))
+                .collect(Collectors.toList());
+
+        api.persistResource(current -> {
+            List<APIResource.APIWebhookKey> merged = new ArrayList<>();
+            if (current.webhookKeys() != null) {
+                for (APIResource.APIWebhookKey webhookKey : current.webhookKeys()) {
+                    if (!getName().equals(webhookKey.webhookName())) {
+                        merged.add(webhookKey);
+                    }
+                }
+            }
+            merged.addAll(thisWebhooksKeys);
+            return new APIResource(current.enabled(), current.configuration(), current.variables(), current.certificate(), merged);
+        });
     }
 
     private String getServletPath(String key) {

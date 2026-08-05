@@ -16,7 +16,10 @@ public record APIResource(
         List<APIVariable> variables,
 
         @Description("Client SSL certificate for mutual TLS")
-        APICertificate certificate
+        APICertificate certificate,
+
+        @Description("Persisted webhook keys, across all named webhooks for this API")
+        List<APIWebhookKey> webhookKeys
 ) {
 
     public record APIVariable(
@@ -42,5 +45,19 @@ public record APIResource(
 
             @Description("PEM-encoded private key")
             SecretConfig privateKey
+    ) {}
+
+    public record APIWebhookKey(
+            @Description("Name of the webhook this key belongs to")
+            String webhookName,
+
+            @Description("The webhook key/token")
+            String key,
+
+            @Description("Externally-assigned id for this webhook subscription")
+            String id,
+
+            @Description("Expiration timestamp for this webhook key (epoch millis), if any")
+            Long ttl
     ) {}
 }
