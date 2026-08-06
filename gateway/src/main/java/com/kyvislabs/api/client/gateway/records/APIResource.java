@@ -26,8 +26,11 @@ public record APIResource(
             @Description("Variable key/name")
             String key,
 
-            @Description("Variable value (may be encrypted)")
+            @Description("Encrypted variable value - populated only when sensitive is true")
             SecretConfig value,
+
+            @Description("Plaintext variable value - populated only when sensitive is false")
+            String plainValue,
 
             @Description("Whether this variable is required for the API to function")
             boolean required,

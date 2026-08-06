@@ -3,7 +3,8 @@ import { FieldValues } from 'react-hook-form';
 
 export interface APIVariable {
   key: string;
-  value: string;
+  value: unknown; // encrypted SecretConfig - populated only when sensitive is true
+  plainValue: string | null; // populated only when sensitive is false
   required: boolean;
   sensitive: boolean;
   hidden: boolean;

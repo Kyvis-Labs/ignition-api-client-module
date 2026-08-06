@@ -38,7 +38,11 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
@@ -59,6 +63,12 @@ public class APIManager {
     private Map<String, API> apiConfigurations;
     private KeyStore keyStore;
     private APIResourceHandler resourceHandler;
+    // One lock per API name so updateResource()'s read-modify-write can't race with itself. Two
+    // functions on independent scheduled-executor threads (e.g. an OAuth2 token refresh and a
+    // variable clear) can both call updateResource() for the same API at once; without this,
+    // NamedResourceHandler.modify()'s optimistic-concurrency push can see a stale signature and
+    // throw PushException ("signature mismatch"), silently dropping whichever update loses the race.
+    private final Map<String, Object> resourceUpdateLocks = new ConcurrentHashMap<>();
 
     public APIManager() {
         tagManager = new TagManager();
@@ -187,23 +197,50 @@ public class APIManager {
      * {@link APIResourceHandler#onResourceUpdated}, which reloads the affected API from the new resource.
      */
     public void updateResource(String name, UnaryOperator<APIResource> mutator) {
-        try {
-            resourceHandler.findResource(name).ifPresentOrElse(
-                    existing -> {
-                        APIResource updated = mutator.apply(existing.config());
-                        try {
-                            resourceHandler.modify(name, updated).exceptionally(ex -> {
-                                logger.error("Error persisting updated resource for '" + name + "'", ex);
-                                return null;
-                            });
-                        } catch (PushException ex) {
-                            logger.error("Error persisting updated resource for '" + name + "'", ex);
+        Object lock = resourceUpdateLocks.computeIfAbsent(name, n -> new Object());
+        synchronized (lock) {
+            final int maxAttempts = 5;
+            try {
+                for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                    Optional<DecodedResource<APIResource>> existing = resourceHandler.findResource(name);
+                    if (existing.isEmpty()) {
+                        logger.warn("Cannot persist resource update for '" + name + "' - resource not found");
+                        return;
+                    }
+
+                    APIResource updated = mutator.apply(existing.get().config());
+                    try {
+                        // modify() can fail two ways: a synchronous PushException (signature already
+                        // known stale), or the returned future completing exceptionally later (the
+                        // conflict is only discovered during the actual async commit). Waiting here
+                        // with .get() lets both be caught and retried by the same loop - previously
+                        // only the synchronous case was retried, and an async failure was just logged
+                        // and dropped with no retry, silently losing the change under exactly the kind
+                        // of write contention this loop exists to handle.
+                        resourceHandler.modify(name, updated).get(15, TimeUnit.SECONDS);
+                        return;
+                    } catch (PushException ex) {
+                        if (attempt == maxAttempts) {
+                            logger.error("Error persisting updated resource for '" + name + "' after " + maxAttempts + " attempts", ex);
+                            return;
                         }
-                    },
-                    () -> logger.warn("Cannot persist resource update for '" + name + "' - resource not found")
-            );
-        } catch (Throwable ex) {
-            logger.error("Error persisting updated resource for '" + name + "'", ex);
+                        logger.debug("Signature conflict persisting resource for '" + name + "', retrying (attempt " + attempt + " of " + maxAttempts + ")");
+                    } catch (ExecutionException ex) {
+                        Throwable cause = ex.getCause();
+                        if (cause instanceof PushException && attempt < maxAttempts) {
+                            logger.debug("Signature conflict persisting resource for '" + name + "', retrying (attempt " + attempt + " of " + maxAttempts + ")");
+                            continue;
+                        }
+                        logger.error("Error persisting updated resource for '" + name + "'" + (attempt == maxAttempts ? " after " + maxAttempts + " attempts" : ""), cause != null ? cause : ex);
+                        return;
+                    } catch (TimeoutException | InterruptedException ex) {
+                        logger.error("Timed out persisting updated resource for '" + name + "'", ex);
+                        return;
+                    }
+                }
+            } catch (Throwable ex) {
+                logger.error("Error persisting updated resource for '" + name + "'", ex);
+            }
         }
     }
 
@@ -242,9 +279,16 @@ public class APIManager {
             try {
                 API api = getAPI(requestContext.getParameter("name"));
                 VariableUpdate[] updates = GatewayHook.GSON.fromJson(requestContext.readBody(), VariableUpdate[].class);
-                for (VariableUpdate update : updates) {
-                    api.getVariables().setVariable(update.key(), update.value());
-                }
+                // Batched into one persist/reload - see Variables.batchUpdate() for why. Without this,
+                // saving several variables at once (the common case here, since the UI always resends
+                // every non-sensitive editable variable) triggered one reload per variable, and a
+                // reload mid-loop could swap in a freshly-reloaded instance that races the remaining
+                // iterations still writing to the old one.
+                api.getVariables().batchUpdate(() -> {
+                    for (VariableUpdate update : updates) {
+                        api.getVariables().setVariable(update.key(), update.value());
+                    }
+                });
                 return Map.of("success", true);
             } catch (APIException ex) {
                 httpServletResponse.sendError(HttpServletResponse.SC_NOT_FOUND, ex.getMessage());
@@ -312,7 +356,12 @@ public class APIManager {
                 }
                 return new OAuth2Status(
                         true,
-                        authType.getGrantType() != null ? authType.getGrantType().getType() : null,
+                        // .name() (e.g. "AUTHORIZATIONCODE") matches the enum constant, not .getType()
+                        // (the OAuth2 wire-format string, e.g. "authorization_code") - the drawer
+                        // compares against the constant name, so sending the wire-format string here
+                        // made every conditional block in APIOAuth2Drawer fail to match and rendered
+                        // an empty drawer regardless of the API's actual grant type.
+                        authType.getGrantType() != null ? authType.getGrantType().name() : null,
                         authType.requiresPKCE(),
                         authType.requiresAuthCode(),
                         authType.requiresCaptcha(),
@@ -381,8 +430,11 @@ public class APIManager {
             try {
                 API api = getAPI(requestContext.getParameter("name"));
                 CodeRequest body = GatewayHook.GSON.fromJson(requestContext.readBody(), CodeRequest.class);
-                api.getVariables().setVariable(OAuth2.VARIABLE_2FA_CODE, body.code());
-                api.getVariables().clearVariable(OAuth2.VARIABLE_2FA_CODE_WAITING);
+                // Batched into one persist/reload - see Variables.batchUpdate() for why.
+                api.getVariables().batchUpdate(() -> {
+                    api.getVariables().setVariable(OAuth2.VARIABLE_2FA_CODE, body.code());
+                    api.getVariables().clearVariable(OAuth2.VARIABLE_2FA_CODE_WAITING);
+                });
                 return Map.of("success", true);
             } catch (APIException ex) {
                 httpServletResponse.sendError(HttpServletResponse.SC_NOT_FOUND, ex.getMessage());
@@ -397,8 +449,11 @@ public class APIManager {
         routes.newRoute("/api/v1/oauth2/:name/2fa-reset").handler((requestContext, httpServletResponse) -> {
             try {
                 API api = getAPI(requestContext.getParameter("name"));
-                api.getVariables().clearVariable(OAuth2.VARIABLE_2FA_CODE);
-                api.getVariables().clearVariable(OAuth2.VARIABLE_2FA_CODE_WAITING);
+                // Batched into one persist/reload - see Variables.batchUpdate() for why.
+                api.getVariables().batchUpdate(() -> {
+                    api.getVariables().clearVariable(OAuth2.VARIABLE_2FA_CODE);
+                    api.getVariables().clearVariable(OAuth2.VARIABLE_2FA_CODE_WAITING);
+                });
                 return Map.of("success", true);
             } catch (APIException ex) {
                 httpServletResponse.sendError(HttpServletResponse.SC_NOT_FOUND, ex.getMessage());

@@ -87,7 +87,10 @@ public class TokenAuth extends AbstractAuthType {
 
         String expirationDateStr = api.getVariables().getVariable(VARIABLE_EXPIRATION);
         try {
-            if (expirationDateStr != null) {
+            // A blank value is functionally "never set" - persisted resources from before the
+            // Variables.persist() null-vs-empty-string fix can still have "" baked in here, so this
+            // stays even though persist() no longer produces it going forward.
+            if (expirationDateStr != null && !expirationDateStr.isEmpty()) {
                 LocalDateTime expirationDate = LocalDateTime.parse(expirationDateStr, DATE_FORMATTER);
                 boolean stillValid = expirationDate.isAfter(LocalDateTime.now());
                 logger.debug("Expiration date: " + expirationDateStr + " (" + stillValid + ")");
@@ -169,15 +172,31 @@ public class TokenAuth extends AbstractAuthType {
                 String response = res.readToText();
                 JSONObject responseObj = new JSONObject(response);
 
-                for (String token : getTokens()) {
-                    String tokenValue = responseObj.getString(token);
-                    api.getVariables().setVariable("auth-" + token, false, true, true, tokenValue);
-                }
+                // Batched into one persist/reload (see Variables.batchUpdate()). This also fixes a
+                // latent bug: these dynamically-named "auth-" tokens use the 5-arg setVariable()
+                // overload (needed to set hidden/sensitive metadata, since they're new variables not
+                // declared by initializeVariables()), which never persists on its own by design -
+                // previously they only got flushed to disk as an incidental side effect of the
+                // expiration setVariable() call below, so if expiresIn wasn't configured they never
+                // persisted at all and were silently lost on every gateway restart. batchUpdate()
+                // always persists once at the end regardless of which calls ran inside it.
+                api.getVariables().batchUpdate(() -> {
+                    try {
+                        for (String token : getTokens()) {
+                            String tokenValue = responseObj.getString(token);
+                            api.getVariables().setVariable("auth-" + token, false, true, true, tokenValue);
+                        }
 
-                if (getExpiresIn() != null) {
-                    String expiration = LocalDateTime.now().plusSeconds(getExpiresIn()).format(DATE_FORMATTER);
-                    api.getVariables().setVariable(VARIABLE_EXPIRATION, expiration);
-                }
+                        if (getExpiresIn() != null) {
+                            String expiration = LocalDateTime.now().plusSeconds(getExpiresIn()).format(DATE_FORMATTER);
+                            api.getVariables().setVariable(VARIABLE_EXPIRATION, expiration);
+                        }
+                    } catch (Exception ex) {
+                        // Runnable.run() can't declare checked exceptions; rethrow unchecked so the
+                        // outer catch(Throwable) below still handles it (JSONException is checked here).
+                        throw new RuntimeException(ex);
+                    }
+                });
             } catch (Throwable ex) {
                 logger.error("Error parsing response");
             }

@@ -77,11 +77,15 @@ public class APIMigrationStrategy implements IdbMigrationStrategy {
                 new SQuery<>(LegacyAPIVariableRecord.META).eq(LegacyAPIVariableRecord.APIId, oldApi.getId()));
 
         for (LegacyAPIVariableRecord oldVar : oldVariables) {
+            // Only sensitive variables get encrypted - everything else is stored as plain text so
+            // ordinary, non-secret config isn't opaque ciphertext (matches Variables.persist()).
+            boolean sensitive = oldVar.isSensitive();
             variables.add(new APIResource.APIVariable(
                     oldVar.getKey(),
-                    toSecretConfig(context, oldVar.getValue()),
+                    sensitive ? toSecretConfig(context, oldVar.getValue()) : null,
+                    !sensitive ? oldVar.getValue() : null,
                     oldVar.isRequired(),
-                    oldVar.isSensitive(),
+                    sensitive,
                     oldVar.isHidden()
             ));
         }

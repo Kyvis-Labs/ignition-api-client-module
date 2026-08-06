@@ -32,12 +32,18 @@ public class OAuth2Servlet extends HttpServlet {
             // State now contains the API name (8.3 uses names instead of numeric IDs)
             apiName = state != null ? state.replace("?name=", "") : state;
             API api = APIManager.get().getAPI(apiName);
-            api.getVariables().setVariable(OAuth2.VARIABLE_AUTHORIZATION_CODE, code);
-            api.getVariables().clearVariable(OAuth2.VARIABLE_ACCESS_TOKEN);
-            api.getVariables().clearVariable(OAuth2.VARIABLE_REFRESH_TOKEN);
-            api.getVariables().clearVariable(OAuth2.VARIABLE_EXPIRATION);
-            // Trigger reload by notifying the config system
-            // (In 8.3 ConfigurationManager handles persistence; variable updates are in-memory for runtime)
+            // Batched into one persist/reload instead of four - each individual setVariable/
+            // clearVariable call persists and triggers a full async API reload, and a reload
+            // triggered mid-sequence here could swap in a freshly-reloaded instance whose own
+            // functions start authenticating concurrently with this method's remaining calls,
+            // racing to persist two different views of the same variables (the new instance seeing
+            // the auth code but not yet the cleared stale token, or vice versa).
+            api.getVariables().batchUpdate(() -> {
+                api.getVariables().setVariable(OAuth2.VARIABLE_AUTHORIZATION_CODE, code);
+                api.getVariables().clearVariable(OAuth2.VARIABLE_ACCESS_TOKEN);
+                api.getVariables().clearVariable(OAuth2.VARIABLE_REFRESH_TOKEN);
+                api.getVariables().clearVariable(OAuth2.VARIABLE_EXPIRATION);
+            });
             success = true;
         } catch (Throwable ex) {
             logger.error("OAuth2: Error processing get response", ex);

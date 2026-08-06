@@ -24,7 +24,8 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.Charset;
-import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -47,8 +48,13 @@ public class OAuth2 extends AbstractAuthType {
     public static final String VARIABLE_PKCE_CODE_VERIFIER = "authType-oauth2-pkce-code-verifier";
     public static final String VARIABLE_PKCE_CODE_CHALLENGE = "authType-oauth2-pkce-code-challenge";
 
+    // DateTimeFormatter is immutable and thread-safe, unlike SimpleDateFormat. isAuthenticated()/
+    // hasExpired() and authenticate() can run concurrently from different functions' scheduled
+    // executor threads sharing this one OAuth2 instance, so a mutable SimpleDateFormat field here
+    // was a real source of "Error checking expiration date" under concurrent access.
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
     private Logger logger;
-    private SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private ValueString authUrl;
     private ValueString accessTokenUrl;
     private String accessTokenKey;
@@ -350,12 +356,16 @@ public class OAuth2 extends AbstractAuthType {
     private Boolean hasExpired() throws APIException {
         String expirationDateStr = api.getVariables().getVariable(VARIABLE_EXPIRATION);
         try {
-            if (expirationDateStr == null) {
+            // A blank value is functionally "never set" - persisted resources from before the
+            // Variables.persist() null-vs-empty-string fix can still have "" baked in here, so this
+            // stays even though persist() no longer produces it going forward.
+            if (expirationDateStr == null || expirationDateStr.isEmpty()) {
                 return null;
             } else {
-                Date expirationDate = df.parse(expirationDateStr);
-                logger.debug("Expiration date: " + expirationDateStr + " (" + expirationDate.after(new Date()) + ")");
-                if (expirationDate.after(new Date())) {
+                LocalDateTime expirationDate = LocalDateTime.parse(expirationDateStr, DATE_FORMATTER);
+                boolean stillValid = expirationDate.isAfter(LocalDateTime.now());
+                logger.debug("Expiration date: " + expirationDateStr + " (" + stillValid + ")");
+                if (stillValid) {
                     return false;
                 }
             }
@@ -444,21 +454,24 @@ public class OAuth2 extends AbstractAuthType {
     }
 
     private void needsAuth() {
-        api.getVariables().clearVariable(OAuth2.VARIABLE_AUTHORIZATION_CODE);
-        api.getVariables().clearVariable(OAuth2.VARIABLE_ACCESS_TOKEN);
-        api.getVariables().clearVariable(OAuth2.VARIABLE_REFRESH_TOKEN);
-        api.getVariables().clearVariable(OAuth2.VARIABLE_EXPIRATION);
+        // Batched into one persist/reload - see Variables.batchUpdate() for why.
+        api.getVariables().batchUpdate(() -> {
+            api.getVariables().clearVariable(OAuth2.VARIABLE_AUTHORIZATION_CODE);
+            api.getVariables().clearVariable(OAuth2.VARIABLE_ACCESS_TOKEN);
+            api.getVariables().clearVariable(OAuth2.VARIABLE_REFRESH_TOKEN);
+            api.getVariables().clearVariable(OAuth2.VARIABLE_EXPIRATION);
 
-        if (requiresBearerAccessToken()) {
-            api.getVariables().clearVariable(OAuth2.VARIABLE_BEARER_ACCESS_TOKEN);
-        }
+            if (requiresBearerAccessToken()) {
+                api.getVariables().clearVariable(OAuth2.VARIABLE_BEARER_ACCESS_TOKEN);
+            }
 
-        if (!api.getStatus().equals(API.APIStatus.NEEDS_2FA_CODE)) {
-            api.setStatus(API.APIStatus.NEEDS_AUTHORIZATION);
-            api.shutdown();
-            api.getVariables().clearVariable(OAuth2.VARIABLE_2FA_CODE);
-            api.getVariables().clearVariable(OAuth2.VARIABLE_2FA_CODE_WAITING);
-        }
+            if (!api.getStatus().equals(API.APIStatus.NEEDS_2FA_CODE)) {
+                api.setStatus(API.APIStatus.NEEDS_AUTHORIZATION);
+                api.shutdown();
+                api.getVariables().clearVariable(OAuth2.VARIABLE_2FA_CODE);
+                api.getVariables().clearVariable(OAuth2.VARIABLE_2FA_CODE_WAITING);
+            }
+        });
     }
 
     private void checkHeaders(RequestBuilder builder) {
@@ -497,8 +510,11 @@ public class OAuth2 extends AbstractAuthType {
         try {
             String codeVerifier = CertificateManager.generateCodeVerifier();
             String codeChallenge = CertificateManager.generateCodeChallange(codeVerifier);
-            api.getVariables().setVariable(VARIABLE_PKCE_CODE_VERIFIER, codeVerifier);
-            api.getVariables().setVariable(VARIABLE_PKCE_CODE_CHALLENGE, codeChallenge);
+            // Batched into one persist/reload - see Variables.batchUpdate() for why.
+            api.getVariables().batchUpdate(() -> {
+                api.getVariables().setVariable(VARIABLE_PKCE_CODE_VERIFIER, codeVerifier);
+                api.getVariables().setVariable(VARIABLE_PKCE_CODE_CHALLENGE, codeChallenge);
+            });
         } catch (Throwable t) {
             logger.error("Error creating code verifier and challenge", t);
         }
@@ -598,11 +614,13 @@ public class OAuth2 extends AbstractAuthType {
 
     public void setAuthorizationCode(String authorizationCode) {
         try {
-            api.getVariables().setVariable(OAuth2.VARIABLE_AUTHORIZATION_CODE, authorizationCode);
-            api.getVariables().clearVariable(OAuth2.VARIABLE_ACCESS_TOKEN);
-            api.getVariables().clearVariable(OAuth2.VARIABLE_REFRESH_TOKEN);
-            api.getVariables().clearVariable(OAuth2.VARIABLE_EXPIRATION);
-            // In 8.3, variable state is in-memory; no DB notification needed
+            // Batched into one persist/reload - see Variables.batchUpdate() for why.
+            api.getVariables().batchUpdate(() -> {
+                api.getVariables().setVariable(OAuth2.VARIABLE_AUTHORIZATION_CODE, authorizationCode);
+                api.getVariables().clearVariable(OAuth2.VARIABLE_ACCESS_TOKEN);
+                api.getVariables().clearVariable(OAuth2.VARIABLE_REFRESH_TOKEN);
+                api.getVariables().clearVariable(OAuth2.VARIABLE_EXPIRATION);
+            });
         } catch (Throwable t) {
             logger.error("Error setting authorization code", t);
         }
@@ -759,20 +777,22 @@ public class OAuth2 extends AbstractAuthType {
                     refreshToken = responseObj.getString("refresh_token");
                 }
 
-                Calendar cal = Calendar.getInstance();
-                cal.setTime(new Date());
-                cal.add(Calendar.SECOND, expiresIn);
-                String expiration = df.format(cal.getTime());
+                String expiration = LocalDateTime.now().plusSeconds(expiresIn).format(DATE_FORMATTER);
+                String finalRefreshToken = refreshToken;
+                boolean hasRefreshToken = responseObj.has("refresh_token");
 
-                api.getVariables().setVariable(VARIABLE_ACCESS_TOKEN, accessToken);
-                api.getVariables().setVariable(VARIABLE_TOKEN_TYPE, tokenType);
-                api.getVariables().setVariable(VARIABLE_EXPIRATION, expiration);
+                // Batched into one persist/reload - see Variables.batchUpdate() for why.
+                api.getVariables().batchUpdate(() -> {
+                    api.getVariables().setVariable(VARIABLE_ACCESS_TOKEN, accessToken);
+                    api.getVariables().setVariable(VARIABLE_TOKEN_TYPE, tokenType);
+                    api.getVariables().setVariable(VARIABLE_EXPIRATION, expiration);
 
-                if (responseObj.has("refresh_token")) {
-                    api.getVariables().setVariable(VARIABLE_REFRESH_TOKEN, refreshToken);
-                }
+                    if (hasRefreshToken) {
+                        api.getVariables().setVariable(VARIABLE_REFRESH_TOKEN, finalRefreshToken);
+                    }
 
-                api.getVariables().clearVariable(VARIABLE_2FA_CODE);
+                    api.getVariables().clearVariable(VARIABLE_2FA_CODE);
+                });
 
                 if (requiresBearerAccessToken()) {
                     getBearerAccessToken(store);
