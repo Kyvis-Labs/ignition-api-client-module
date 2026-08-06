@@ -467,7 +467,11 @@ public class OAuth2 extends AbstractAuthType {
 
             if (!api.getStatus().equals(API.APIStatus.NEEDS_2FA_CODE)) {
                 api.setStatus(API.APIStatus.NEEDS_AUTHORIZATION);
-                api.shutdown();
+                // pause(), not shutdown() - this API instance stays alive and current (no reload is
+                // guaranteed to follow, e.g. if everything here was already cleared by a previous
+                // call), so unregistering its health check/metrics via shutdown() would permanently
+                // break the status the React UI reads for this API.
+                api.pause();
                 api.getVariables().clearVariable(OAuth2.VARIABLE_2FA_CODE);
                 api.getVariables().clearVariable(OAuth2.VARIABLE_2FA_CODE_WAITING);
             }

@@ -170,7 +170,11 @@ public class WebhookKey implements VariableStore, WriteHandler {
         if (isExists()) {
             if (getTTLMs() != null) {
                 if (getTtlFuture() != null) {
-                    getTtlFuture().cancel(true);
+                    // false, not true: schedule() is called at the end of WebhookRunnable.run()
+                    // itself, so getTtlFuture() here is often that same currently-executing task -
+                    // interrupting it would interrupt the calling thread itself. See
+                    // Schedule.shutdown() for the full explanation of this pattern.
+                    getTtlFuture().cancel(false);
                 }
                 setTtlFuture(webhook.getApi().getGatewayContext().getScheduledExecutorService().schedule(new WebhookRunnable(this), getTTLMs(), TimeUnit.MILLISECONDS));
             }
@@ -194,6 +198,16 @@ public class WebhookKey implements VariableStore, WriteHandler {
     public QualityCode write(TagPath tagPath, Object o) {
         updateStatusTag("Remove", false);
 
+        // Dispatched async, not run inline - webhook.getRemove().callBlocking(this) is a network
+        // call, and blocking here would tie up whatever (often limited-size) thread pool the tag
+        // system uses to deliver writes, the same way TagWriteHandler.write() dispatches its
+        // function calls via executeAsync() instead of running them inline. The write to this tag
+        // itself always succeeds; removal happens in the background.
+        webhook.getApi().getGatewayContext().getScheduledExecutorService().execute(this::remove);
+        return QualityCode.Good;
+    }
+
+    private void remove() {
         boolean failed = false;
 
         Integer statusCode = webhook.getRemove().callBlocking(this);
@@ -217,7 +231,9 @@ public class WebhookKey implements VariableStore, WriteHandler {
             failed = true;
         }
 
-        return failed ? QualityCode.Error : QualityCode.Good;
+        if (failed) {
+            webhook.getLogger().error(getKey() + ": Error removing webhook");
+        }
     }
 
     public class WebhookRunnable implements Runnable {

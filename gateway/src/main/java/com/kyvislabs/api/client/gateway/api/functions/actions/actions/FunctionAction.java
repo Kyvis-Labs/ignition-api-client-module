@@ -137,7 +137,11 @@ public class FunctionAction extends Action implements VariableStore {
     @Override
     public void shutdown() {
         if (getRetry() != null && getRetry().getScheduledFuture() != null) {
-            getRetry().getScheduledFuture().cancel(true);
+            // false, not true: this can be called from inside the retry's own currently-executing
+            // task (a retried FunctionExecutor whose authenticate() call triggers needsAuth() ->
+            // pause() -> ... -> here), where interrupting would interrupt the calling thread itself.
+            // See Schedule.shutdown() for the full explanation of this pattern.
+            getRetry().getScheduledFuture().cancel(false);
         }
     }
 

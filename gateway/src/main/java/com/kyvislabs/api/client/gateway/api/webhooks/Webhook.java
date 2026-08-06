@@ -111,15 +111,19 @@ public class Webhook {
     private void init() throws APIException {
         // In 8.3, webhook state is held in-memory only (no PersistentRecord DB).
         // On startup, if checkOnStart is configured and no keys exist yet, add the default.
-        if (isCheckOnStart()) {
-            if (getWebhookKeys().size() == 0) {
-                addWebhookKey(getDefaultKey().getValue(), getDefaultId() == null ? null : getDefaultId().getValue(), getDefaultTTL());
-            }
+        if (isCheckOnStart() && getWebhookKeys().size() == 0) {
+            addWebhookKey(getDefaultKey().getValue(), getDefaultId() == null ? null : getDefaultId().getValue(), getDefaultTTL());
+        }
 
-            for (String webhookKey : getWebhookKeys().keySet()) {
-                WebhookKey webhookKeyObj = getWebhookKeys().get(webhookKey);
-                webhookKeyObj.execute();
-            }
+        // Re-verify (and, via WebhookRunnable.run() -> schedule(), re-arm the periodic TTL recheck
+        // for) every currently-known key - whether just created above or restored from a previous
+        // session in the constructor. WebhookKey.exists and its recheck ScheduledFuture are
+        // transient, in-memory-only state (not part of the persisted APIWebhookKey), so without this
+        // unconditional pass, a key created dynamically via a WebhookAction - the common case
+        // documented for webhooks, independent of checkOnStart - would silently stop being monitored
+        // after every gateway restart or API reload until it eventually just expired unnoticed.
+        for (WebhookKey webhookKeyObj : getWebhookKeys().values()) {
+            webhookKeyObj.execute();
         }
     }
 
@@ -177,7 +181,11 @@ public class Webhook {
         for (String webhookKey : getWebhookKeys().keySet()) {
             WebhookKey webhookKeyObj = getWebhookKeys().get(webhookKey);
             if (webhookKeyObj.getTtlFuture() != null) {
-                webhookKeyObj.getTtlFuture().cancel(true);
+                // false, not true: this can be called from inside the TTL future's own currently-
+                // executing WebhookRunnable (if its check/add call triggers needsAuth() -> pause() ->
+                // here for this same webhook), where interrupting would interrupt the calling thread
+                // itself. See Schedule.shutdown() for the full explanation of this pattern.
+                webhookKeyObj.getTtlFuture().cancel(false);
             }
         }
     }

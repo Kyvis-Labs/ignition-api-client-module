@@ -40,7 +40,13 @@ The `gateway` module contains nearly all logic. Key subsystems:
 
 **Lifecycle & Entry Point**
 - `GatewayHook.java` — Module lifecycle (startup/shutdown), registers the `APIResource` type with `ConfigurationManager`, registers the React UI's navigation entry (`SystemJsModule`), registers the RPC implementation (`getRpcImplementation()`), and lists migration strategies (`getRecordMigrationStrategies()`)
-- `managers/APIManager.java` — Singleton managing all API instances. Owns a `NamedResourceHandler<APIResource>` that reacts to ConfigurationManager add/update/remove events, and registers the module's raw `HttpServlet`s (`OAuth2Servlet`, `WebhookServlet`, `StoreFileServlet`) via `gatewayContext.getWebResourceManager().addServlet(...)` in `startup()` — these are **not** wired up anywhere else, so don't assume a different registration path exists.
+- `managers/APIManager.java` — Singleton (initialization-on-demand holder, not a null-check-and-assign) managing all API instances. Owns a `NamedResourceHandler<APIResource>` that reacts to ConfigurationManager add/update/remove events, and registers the module's raw `HttpServlet`s (`OAuth2Servlet`, `WebhookServlet`, `StoreFileServlet`) via `gatewayContext.getWebResourceManager().addServlet(...)` in `startup()` — these are **not** wired up anywhere else, so don't assume a different registration path exists.
+
+**`API.shutdown()` vs `API.pause()`:** `shutdown()` is full teardown — stops functions/webhooks *and* unregisters this instance's health check/metrics (`unregisterMetrics()`) — used when the instance is being replaced by a reload or permanently removed. `pause()` only stops functions/webhooks, leaving metrics registered; use this when the `API` object itself stays alive and current (e.g. `OAuth2.needsAuth()` losing authorization mid-run) so the status the React UI reads keeps working. Calling `shutdown()` from a context where the instance isn't actually being replaced leaves its health check permanently unregistered with nothing to ever re-register it.
+
+**Scheduled task self-cancellation:** `Schedule.shutdown()` and the equivalent cancellation points in `FunctionAction`/`Webhook`/`WebhookKey` all call `cancel(false)`, not `cancel(true)`, on their own `ScheduledFuture`s. These `shutdown()`/`schedule()` calls can happen from *inside* that same future's own currently-executing task (e.g. an OAuth2 auth failure inside a scheduled `FunctionExecutor` triggering `needsAuth()` → `api.pause()` → `Schedule.shutdown()` for the very function that's running) — `cancel(true)` would interrupt the calling thread itself mid-execution. Keep new cancellation sites consistent with this.
+
+**Concurrent authentication:** `AuthType.authenticate()` is synchronized on a per-instance lock and re-checks `isAuthenticated()` once the lock is held, so two functions detecting "not authenticated" at the same time can't both kick off a token/code exchange concurrently — for an authorization-code grant the code is single-use, so a losing concurrent attempt would fail and its `needsAuth()` cleanup could wipe out the winning attempt's just-obtained token. Any new code that bypasses this wrapper to call an `AuthTypeInterface` implementation's `authenticate()` directly loses this protection.
 
 **API Execution Pipeline**
 1. API config is stored as YAML inside `records/APIResource.java`, a record persisted as a ConfigurationManager resource (module id `com.kyvislabs.api.client`, type id `api` — see `records/ResourceTypes.java`). APIs are looked up **by name**, not by a numeric id.
@@ -61,7 +67,7 @@ The `gateway` module contains nearly all logic. Key subsystems:
 - `ScriptAction` — executes Python scripts
 - `FunctionAction` — calls other API functions
 - `VariableAction` — stores values in the *function-local* variable store (`Function.setVariable`) — this is separate from, and does not persist to, the API-level `Variables` store below
-- `WebhookAction` — triggers outbound webhooks
+- `WebhookAction` — triggers outbound webhooks. `Webhook.init()` (called on every API startup/reload) re-runs `execute()` on *every* known webhook key, not just ones created via `checkOnStart` — a key's `exists` flag and periodic TTL-recheck `ScheduledFuture` are transient, in-memory-only `WebhookKey` state, not part of the persisted `APIResource.APIWebhookKey`, so a key created dynamically via `WebhookAction` needs this unconditional re-verification pass to keep being monitored across a restart/reload
 - `StoreFileAction` — saves response content to files under `<gatewayDataDir>/modules/com.kyvislabs.api.client/<apiName>/`; access is via a random token file (`<token>.token` containing the filename), not a DB row
 - `RunIf` / `Switch` / `Case` — conditional logic
 

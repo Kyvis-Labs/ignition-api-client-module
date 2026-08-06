@@ -152,7 +152,13 @@ public class Schedule implements TagChangeListener {
 
     public void shutdown() {
         if (getScheduledFuture() != null) {
-            getScheduledFuture().cancel(true);
+            // mayInterruptIfRunning=false: shutdown() can be called from inside this schedule's own
+            // currently-executing task (e.g. OAuth2.needsAuth() -> api.pause() -> ... -> here, called
+            // from within FunctionExecutor.execute() running on this very future). Interrupting would
+            // interrupt the calling thread itself mid-execution, which risks corrupting whatever it
+            // does next (e.g. an in-flight persist's blocking wait). false still prevents any future
+            // execution; an already-running one is left to finish naturally instead of being forced.
+            getScheduledFuture().cancel(false);
         }
 
         if (getCronScheduler() != null) {

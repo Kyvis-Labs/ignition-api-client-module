@@ -614,18 +614,20 @@ ___
 **ttl** integer *(optional)*
 The time to live, in days, for the webhook.
 ___
-**check** [function](#function) *(optional)*
-The function that defines how to check if the callback exists on your API. The check function is called when the API starts up.
+**check** [function](#function) *(required)*
+The function that defines how to check if the callback exists on your API. Called for each known webhook key on API startup (both keys created via `checkOnStart` and keys restored from a previous session), and then again periodically until the key's `ttl` is reached.
 ___
-**add** [function](#function) *(optional)*
+**add** [function](#function) *(required)*
 The function that adds a new callback to your API. The callback gets added if it doesn't exist. The function defines how to add the callback and automatically specifies the callback URL from Ignition. The function must store a variable called *id* with the identifier of the webhook, otherwise you must specify the id as a parameter. See above.
 ___
-**remove** [function](#function) *(optional)*
-The function that removes the callback from your API. The remove function is called on restart or shutdown of the API.
+**remove** [function](#function) *(required)*
+The function that removes the callback from your API. This is **not** called automatically on restart or shutdown - it runs when you write `true` to the webhook key's generated `.../Remove` tag (see below), i.e. it's a manual/scripted removal action, not an automatic lifecycle event.
 ___
-**handle** [function](#function) *(optional)*
+**handle** [function](#function) *(required)*
 The function that handles the actual callback. The API will post data to Ignition using the supplied callback URL and the function will handle the response data.
 > **Note:** You only need to define the actions to perform with the response data on the function. Since the API is sending the data to Ignition there is no need to define how to connect to the API within the function.
+
+> **Note:** All four functions above are required - a webhook definition missing any of them fails to load.
 
 ## functions
 

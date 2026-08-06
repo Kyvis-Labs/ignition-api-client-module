@@ -49,13 +49,17 @@ import java.util.stream.Collectors;
 public class APIManager {
     private final Logger logger = LoggerFactory.getLogger("API.Manager");
 
-    private static APIManager _INSTANCE = null;
+    // Initialization-on-demand holder: the JVM guarantees Holder.INSTANCE is created lazily (only
+    // once get() is first called) and exactly once, with no explicit synchronization needed here -
+    // unlike the previous "if (_INSTANCE == null) { _INSTANCE = new APIManager(); }", which could
+    // construct two different instances (each with its own apiConfigurations map, locks, etc.) if
+    // get() were ever called concurrently by two threads before the first call completed.
+    private static class Holder {
+        private static final APIManager INSTANCE = new APIManager();
+    }
 
     public static APIManager get() {
-        if (_INSTANCE == null) {
-            _INSTANCE = new APIManager();
-        }
-        return _INSTANCE;
+        return Holder.INSTANCE;
     }
 
     private GatewayContext gatewayContext;

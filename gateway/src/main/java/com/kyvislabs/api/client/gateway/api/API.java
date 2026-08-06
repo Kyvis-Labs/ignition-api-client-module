@@ -189,10 +189,20 @@ public class API implements WriteHandler {
         }
     }
 
-    public void shutdown() {
-        logger.debug("Shutting down");
+    /**
+     * Stops functions/webhooks without unregistering this instance's health check/metrics - use this
+     * (not shutdown()) when the API instance itself stays alive and current (e.g. OAuth2 losing
+     * authorization mid-run), so the status/health data the React UI reads keeps working. shutdown()
+     * is for real teardown - this API is being replaced by a reload or permanently removed.
+     */
+    public void pause() {
         webhooks.shutdown();
         functions.shutdown();
+    }
+
+    public void shutdown() {
+        logger.debug("Shutting down");
+        pause();
         try {
             unregisterMetrics();
         } catch (Throwable ex) {
