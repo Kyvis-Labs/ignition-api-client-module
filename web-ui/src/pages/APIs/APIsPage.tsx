@@ -16,7 +16,7 @@ import {
   ModalType,
   useToastNotifications,
 } from '@inductiveautomation/ignition-web-ui';
-import { AddSmall, EditGw, DeleteGw, Key, Security, NavServices } from '@inductiveautomation/ignition-icons';
+import { AddSmall, EditGw, DeleteGw, Key, Security, NavServices, Power, Disabled } from '@inductiveautomation/ignition-icons';
 import { getAPIClientPageStyles } from '../_APIClient.styles';
 import { APIListItem, APIConfig, APIRow, APIUtils, DEFAULT_API_CONFIG } from './APIForm.types';
 import useFetch from '../../utils/useFetch';
@@ -136,24 +136,32 @@ const APIsPage = () => {
       {
         fieldName: 'functionsRunning',
         header: 'Functions',
-        cell: ({ row }) => (
-          <div>
-            <div>{row.originalValue.functionsRunning} running</div>
-            <div>{row.originalValue.functionsUnknown} unknown</div>
-            <div className={acFontRed}>{row.originalValue.functionsFailed} failed</div>
-          </div>
-        ),
+        // A disabled API doesn't run its functions, so a running/unknown/failed breakdown is
+        // meaningless (and always zero) - show a placeholder instead of implying it's being tracked.
+        cell: ({ row }) =>
+          row.originalValue.enabled ? (
+            <div>
+              <div>{row.originalValue.functionsRunning} running</div>
+              <div>{row.originalValue.functionsUnknown} unknown</div>
+              <div className={acFontRed}>{row.originalValue.functionsFailed} failed</div>
+            </div>
+          ) : (
+            <div>—</div>
+          ),
       },
       {
         fieldName: 'webhooksRunning',
         header: 'Webhooks',
-        cell: ({ row }) => (
-          <div>
-            <div>{row.originalValue.webhooksRunning} running</div>
-            <div>{row.originalValue.webhooksWaiting} waiting</div>
-            <div className={acFontRed}>{row.originalValue.webhooksFailed} failed</div>
-          </div>
-        ),
+        cell: ({ row }) =>
+          row.originalValue.enabled ? (
+            <div>
+              <div>{row.originalValue.webhooksRunning} running</div>
+              <div>{row.originalValue.webhooksWaiting} waiting</div>
+              <div className={acFontRed}>{row.originalValue.webhooksFailed} failed</div>
+            </div>
+          ) : (
+            <div>—</div>
+          ),
       },
       {
         fieldName: 'enabled',
@@ -244,12 +252,46 @@ const APIsPage = () => {
     [fetchResource]
   );
 
+  const handleToggleEnabledClick = useCallback(
+    async (row) => {
+      const data = await fetchResource(row.name);
+      if (!data) return;
+      try {
+        const config: APIConfig = { ...data.config, enabled: !data.config.enabled };
+        const response = await fetch(RESOURCE_URL, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify([{ name: data.name, signature: data.signature, config }]),
+        });
+        if (response.ok) {
+          notifySuccess(config.enabled ? 'API enabled' : 'API disabled', true);
+          tableRefresh();
+        } else {
+          notifyError(await getErrorMessage(response, 'Failed to update API'), true);
+        }
+      } catch (e) {
+        notifyError('Failed to update API. View logs for more details.', true);
+      }
+    },
+    [fetchResource, csrfToken, notifySuccess, notifyError, tableRefresh]
+  );
+
   const showMoreCallback = useCallback(
     (row): MenuItem[] => [
       {
         onClick: (row) => handleEditClick(row),
         icon: () => <EditGw width="1.5rem" height="1.5rem" data-icon="edit" />,
         text: 'Edit',
+      },
+      {
+        onClick: (row) => handleToggleEnabledClick(row),
+        icon: () =>
+          row.enabled ? (
+            <Disabled width="1.5rem" height="1.5rem" data-icon="disable" />
+          ) : (
+            <Power width="1.5rem" height="1.5rem" data-icon="enable" />
+          ),
+        text: row.enabled ? 'Disable' : 'Enable',
         divider: true,
       },
       {
@@ -275,7 +317,7 @@ const APIsPage = () => {
         className: acDeleteButton,
       },
     ],
-    [handleEditClick, handleVariablesClick, handleCertificateClick, handleOAuth2Click, handleDeleteClick, acDeleteButton]
+    [handleEditClick, handleToggleEnabledClick, handleVariablesClick, handleCertificateClick, handleOAuth2Click, handleDeleteClick, acDeleteButton]
   );
 
   const addAPI = async () => {
