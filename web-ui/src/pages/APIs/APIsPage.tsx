@@ -143,7 +143,7 @@ const APIsPage = () => {
             <div>
               <div>{row.originalValue.functionsRunning} running</div>
               <div>{row.originalValue.functionsUnknown} unknown</div>
-              <div className={acFontRed}>{row.originalValue.functionsFailed} failed</div>
+              <div className={row.originalValue.functionsFailed > 0 ? acFontRed : undefined}>{row.originalValue.functionsFailed} failed</div>
             </div>
           ) : (
             <div>—</div>
@@ -157,7 +157,7 @@ const APIsPage = () => {
             <div>
               <div>{row.originalValue.webhooksRunning} running</div>
               <div>{row.originalValue.webhooksWaiting} waiting</div>
-              <div className={acFontRed}>{row.originalValue.webhooksFailed} failed</div>
+              <div className={row.originalValue.webhooksFailed > 0 ? acFontRed : undefined}>{row.originalValue.webhooksFailed} failed</div>
             </div>
           ) : (
             <div>—</div>
