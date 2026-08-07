@@ -600,6 +600,12 @@ Defines a webhook that enables callbacks in Ignition. The webhook takes care of 
 
 There are 2 ways to create up a webhook: created from a function response or independently by providing a webhook key. Some APIs will provide a list of devices where you can create a separate webhook for each one. With that, you will leverage a webhook action when handling a function response. If you want to create webhooks without calling a separate API, you can provide the webhook key and tell the module to create the webhook on start.
 
+> **Note:** which store `check`/`add`/`remove` see for `{{var::...}}` tokens depends on which of the two ways above you use, and on whether the invocation was triggered by that mechanism directly or is an automatic recheck.
+>
+> A webhook created **independently** (`checkOnStart: true`, key/id given directly in this config) is always driven by the webhook key itself - both the initial check/add at startup and every periodic recheck afterward - so use `{{var::webhook.key}}`, `{{var::webhook.id}}`, `{{var::webhook.name}}`, `{{var::webhook.url}}`.
+>
+> A webhook created **from a function response** (via a [webhook action](#actionwebhook)) is driven by that action's own variables *only on the invocation the action itself triggers* - there, use `{{var::handler.key}}`/`{{var::handler.id}}`/`{{var::handler.name}}`/`{{var::handler.url}}` (the same fixed fields, under `handler` instead of `webhook`) plus whatever custom `variables` the action supplied (e.g. `{{var::handler.deviceId}}`). This kind of webhook has no automatic startup check and no periodic TTL recheck of its own - it's only ever (re-)verified when its owning function runs, on that function's own schedule (which is why a `duration: 0` timer, run once at every startup, is a common choice for a function that manages webhooks this way). If you do give it a `ttl`, be aware that the periodic recheck it schedules uses the webhook key itself as the store, not a `handler`-named one - so if `check`/`add` reference `{{var::handler.xxx}}`, that recheck's own `add` (if `check` ever reports the webhook gone) won't resolve those tokens. In practice this only matters if you rely on `ttl` for this kind of webhook; leaving `ttl` unset (the common case, since the owning function already re-verifies on its own schedule) avoids the question entirely.
+
 ### Parameters
 
 **checkOnStart** boolean *(optional)*

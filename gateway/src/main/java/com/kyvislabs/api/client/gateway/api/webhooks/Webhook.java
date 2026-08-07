@@ -5,11 +5,9 @@ import com.kyvislabs.api.client.common.exceptions.APIException;
 import com.kyvislabs.api.client.gateway.api.API;
 import com.kyvislabs.api.client.gateway.api.ValueString;
 import com.kyvislabs.api.client.gateway.api.functions.Function;
-import com.kyvislabs.api.client.gateway.records.APIResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
@@ -39,16 +37,22 @@ public class Webhook {
         this.name = name;
         this.webhookKeys = new ConcurrentHashMap<>();
 
-        // Restore persisted webhook keys (issued to external systems) so they survive a restart
-        List<APIResource.APIWebhookKey> persisted = api.getResource().webhookKeys();
-        if (persisted != null) {
-            for (APIResource.APIWebhookKey webhookKey : persisted) {
-                if (name.equals(webhookKey.webhookName())) {
-                    logger.debug("Restoring persisted webhook key '" + webhookKey.key() + "'");
-                    Date ttlDate = webhookKey.ttl() != null ? new Date(webhookKey.ttl()) : null;
-                    webhookKeys.put(webhookKey.key(), new WebhookKey(this, webhookKey.key(), webhookKey.id(), getServletUrl(webhookKey.key()), ttlDate));
-                }
+        // Webhook keys are runtime state (issued to/tracked against an external system), not config -
+        // unlike variables/certificate, a change here shouldn't force the whole API to reload (it's
+        // already running, mid-execution more often than not). Persisted straight to a file via
+        // WebhookKeyStore (see there for why), instead of through api.persistResource() /
+        // ConfigurationManager, which has no way to push a resource change without also triggering a
+        // full async reload. Restoring a key here only makes it known/found again (e.g. by
+        // getWebhookKeyOrCreate() below) - it does not, by itself, check/add/execute anything; see
+        // init() for what runs automatically on startup and what waits for something else to call it.
+        try {
+            for (WebhookKeyStore.PersistedWebhookKey webhookKey : WebhookKeyStore.read(api.getGatewayContext().getSystemManager().getDataDir(), api.getName(), name)) {
+                logger.debug("Restoring persisted webhook key '" + webhookKey.key() + "'");
+                Date ttlDate = webhookKey.ttl() != null ? new Date(webhookKey.ttl()) : null;
+                webhookKeys.put(webhookKey.key(), new WebhookKey(this, webhookKey.key(), webhookKey.id(), getServletUrl(webhookKey.key()), ttlDate));
             }
+        } catch (Throwable t) {
+            logger.error("Error reading persisted webhook keys", t);
         }
     }
 
@@ -109,21 +113,35 @@ public class Webhook {
     }
 
     private void init() throws APIException {
-        // In 8.3, webhook state is held in-memory only (no PersistentRecord DB).
-        // On startup, if checkOnStart is configured and no keys exist yet, add the default.
-        if (isCheckOnStart() && getWebhookKeys().size() == 0) {
-            addWebhookKey(getDefaultKey().getValue(), getDefaultId() == null ? null : getDefaultId().getValue(), getDefaultTTL());
-        }
+        // Only checkOnStart webhooks are driven from here - a checkOnStart webhook has no owning
+        // function, so nothing else will ever check/add it or re-arm its periodic TTL recheck
+        // (WebhookKey.schedule(), invoked at the end of a successful run). If the key isn't already
+        // known (first run ever, or restored from a previous session found nothing - see the
+        // constructor), create the default one from this config. Either way, execute() it: for a
+        // brand-new key that's the initial check/add; for a restored one it's the re-verification and
+        // TTL-recheck re-arm that survives a restart, since WebhookKey.exists and its recheck
+        // ScheduledFuture are transient, in-memory-only state, not part of what's persisted.
+        //
+        // A WebhookAction-created key (checkOnStart == false) is restored into memory (in the
+        // constructor) so getWebhookKeyOrCreate() can find and reuse it, but is deliberately NOT
+        // executed here. Its owning function is what's responsible for checking/re-verifying it, on
+        // that function's own schedule, whenever it next runs - the information persisted here is
+        // available immediately, but nothing acts on it until that function calls in. Executing it
+        // here too would just race that function's own invocation for no benefit, since this pass has
+        // no way to supply whatever custom variables the function's WebhookAction would.
+        if (isCheckOnStart()) {
+            // Check for this specific key, not just "is the map non-empty" - defaultKey is a value
+            // string, so its resolved value isn't necessarily constant across reloads (e.g. if it
+            // references a variable that changed); comparing by size would skip creating the current
+            // key if some other (now-stale) key happened to already be present.
+            String key = getDefaultKey().getValue();
+            if (!getWebhookKeys().containsKey(key)) {
+                addWebhookKey(key, getDefaultId() == null ? null : getDefaultId().getValue(), getDefaultTTL());
+            }
 
-        // Re-verify (and, via WebhookRunnable.run() -> schedule(), re-arm the periodic TTL recheck
-        // for) every currently-known key - whether just created above or restored from a previous
-        // session in the constructor. WebhookKey.exists and its recheck ScheduledFuture are
-        // transient, in-memory-only state (not part of the persisted APIWebhookKey), so without this
-        // unconditional pass, a key created dynamically via a WebhookAction - the common case
-        // documented for webhooks, independent of checkOnStart - would silently stop being monitored
-        // after every gateway restart or API reload until it eventually just expired unnoticed.
-        for (WebhookKey webhookKeyObj : getWebhookKeys().values()) {
-            webhookKeyObj.execute();
+            for (WebhookKey webhookKeyObj : getWebhookKeys().values()) {
+                webhookKeyObj.execute();
+            }
         }
     }
 
@@ -137,32 +155,27 @@ public class Webhook {
     }
 
     /**
-     * Persists this webhook's current keys back into the API's ConfigurationManager resource, so
-     * externally-issued webhook keys survive a gateway restart. Other webhooks' persisted keys are
-     * left untouched.
+     * Persists this webhook's current keys to disk, so externally-issued webhook keys survive a
+     * gateway restart, without touching the ConfigurationManager resource (see the constructor for
+     * why - a change here shouldn't force the whole API to reload). Synchronized so two threads
+     * writing around the same time (e.g. two keys both getting an id assigned in quick succession)
+     * can't interleave and corrupt the file - each still writes a full, self-consistent snapshot of
+     * the live map, just not concurrently.
      */
-    void persistWebhookKeys() {
-        List<APIResource.APIWebhookKey> thisWebhooksKeys = getWebhookKeys().values().stream()
-                .map(webhookKey -> new APIResource.APIWebhookKey(
-                        getName(),
+    synchronized void persistWebhookKeys() {
+        List<WebhookKeyStore.PersistedWebhookKey> entries = getWebhookKeys().values().stream()
+                .map(webhookKey -> new WebhookKeyStore.PersistedWebhookKey(
                         webhookKey.getKey(),
                         webhookKey.getId(),
                         webhookKey.getTtl() != null ? webhookKey.getTtl().getTime() : null
                 ))
                 .collect(Collectors.toList());
 
-        api.persistResource(current -> {
-            List<APIResource.APIWebhookKey> merged = new ArrayList<>();
-            if (current.webhookKeys() != null) {
-                for (APIResource.APIWebhookKey webhookKey : current.webhookKeys()) {
-                    if (!getName().equals(webhookKey.webhookName())) {
-                        merged.add(webhookKey);
-                    }
-                }
-            }
-            merged.addAll(thisWebhooksKeys);
-            return new APIResource(current.enabled(), current.configuration(), current.variables(), current.certificate(), merged);
-        });
+        try {
+            WebhookKeyStore.write(api.getGatewayContext().getSystemManager().getDataDir(), api.getName(), getName(), entries);
+        } catch (Throwable t) {
+            logger.error("Error persisting webhook keys", t);
+        }
     }
 
     private String getServletPath(String key) {

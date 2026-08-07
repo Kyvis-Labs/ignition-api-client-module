@@ -15,21 +15,14 @@ export interface APICertificate {
   privateKey: unknown;
 }
 
-export interface APIWebhookKey {
-  webhookName: string;
-  key: string;
-  id: string | null;
-  ttl: number | null;
-}
-
 // Mirrors gateway/.../records/APIResource.java - the resource's typed config payload,
-// nested under "config" in the generic ConfigurationManager REST resource shape.
+// nested under "config" in the generic ConfigurationManager REST resource shape. Webhook keys are
+// runtime state persisted separately (see WebhookKeyStore), not part of this resource at all.
 export interface APIConfig {
   enabled: boolean;
   configuration: string;
   variables: APIVariable[];
   certificate: APICertificate | null;
-  webhookKeys: APIWebhookKey[];
 }
 
 // Populated by ResourceTypes.buildStatusDelegate + API.registerMetrics() - see gateway/.../records/ResourceTypes.java
@@ -80,7 +73,6 @@ export const DEFAULT_API_CONFIG: APIConfig = {
   configuration: '',
   variables: [],
   certificate: null,
-  webhookKeys: [],
 };
 
 // Matches APIManager's variables REST routes (Variables.VariableInfo on the Java side).

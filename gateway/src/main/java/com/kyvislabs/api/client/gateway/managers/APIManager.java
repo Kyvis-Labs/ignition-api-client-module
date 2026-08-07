@@ -339,7 +339,7 @@ public class APIManager {
 
                 APIResource.APICertificate newCert = new APIResource.APICertificate(update.certificate(), privateKey);
                 api.persistResource(current -> new APIResource(
-                        current.enabled(), current.configuration(), current.variables(), newCert, current.webhookKeys()
+                        current.enabled(), current.configuration(), current.variables(), newCert
                 ));
                 return Map.of("success", true);
             } catch (APIException ex) {

@@ -8,6 +8,7 @@ import com.inductiveautomation.ignition.gateway.config.migration.IdbMigrationStr
 import com.inductiveautomation.ignition.gateway.config.migration.MigrationContext;
 import com.inductiveautomation.ignition.gateway.config.migration.MigrationException;
 import com.inductiveautomation.ignition.gateway.config.migration.MigrationLog;
+import com.kyvislabs.api.client.gateway.api.webhooks.WebhookKeyStore;
 import com.kyvislabs.api.client.gateway.records.legacy.LegacyAPICertificateRecord;
 import com.kyvislabs.api.client.gateway.records.legacy.LegacyAPIRecord;
 import com.kyvislabs.api.client.gateway.records.legacy.LegacyAPIVariableRecord;
@@ -19,7 +20,9 @@ import simpleorm.dataset.SRecordInstance;
 import simpleorm.dataset.SRecordMeta;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -105,18 +108,23 @@ public class APIMigrationStrategy implements IdbMigrationStrategy {
             }
         }
 
-        // Load webhook keys for this API
-        List<APIResource.APIWebhookKey> webhookKeys = new ArrayList<>();
+        // Migrate webhook keys straight to the file-based store (see WebhookKeyStore) instead of
+        // embedding them in the APIResource - webhook keys are runtime state tracked against an
+        // external system, not config, so they don't belong in the ConfigurationManager resource at
+        // all (see Webhook.persistWebhookKeys() for the full reasoning).
         List<LegacyAPIWebhookRecord> oldWebhooks = context.getPersistenceSession().query(
                 new SQuery<>(LegacyAPIWebhookRecord.META).eq(LegacyAPIWebhookRecord.APIId, oldApi.getId()));
 
+        Map<String, List<WebhookKeyStore.PersistedWebhookKey>> webhookKeysByName = new HashMap<>();
         for (LegacyAPIWebhookRecord oldWebhook : oldWebhooks) {
-            webhookKeys.add(new APIResource.APIWebhookKey(
-                    oldWebhook.getName(),
+            webhookKeysByName.computeIfAbsent(oldWebhook.getName(), n -> new ArrayList<>()).add(new WebhookKeyStore.PersistedWebhookKey(
                     oldWebhook.getKey(),
                     oldWebhook.getUId(),
                     oldWebhook.getTTL() != null ? oldWebhook.getTTL().getTime() : null
             ));
+        }
+        for (Map.Entry<String, List<WebhookKeyStore.PersistedWebhookKey>> entry : webhookKeysByName.entrySet()) {
+            WebhookKeyStore.write(context.getSystemManager().getDataDir(), oldApi.getName(), entry.getKey(), entry.getValue());
         }
 
         // Build the new resource
@@ -124,8 +132,7 @@ public class APIMigrationStrategy implements IdbMigrationStrategy {
                 oldApi.isEnabled(),
                 oldApi.getConfiguration() != null ? oldApi.getConfiguration() : "",
                 variables,
-                certificate,
-                webhookKeys
+                certificate
         );
 
         ResourceBuilder builder = Resource.newBuilder()

@@ -158,6 +158,10 @@ public class WebhookKey implements VariableStore, WriteHandler {
         // no-op
     }
 
+    // Only ever called for checkOnStart webhooks - see Webhook.init(), which deliberately never
+    // calls this (or execute(VariableStore)) for a WebhookAction-created key. Uses `this` directly
+    // (store name "webhook") since checkOnStart's check/add are written expecting the WebhookKey
+    // itself, e.g. Google SDM's add body uses {{var::webhook.url}}.
     public void execute() {
         execute(this);
     }
@@ -166,6 +170,11 @@ public class WebhookKey implements VariableStore, WriteHandler {
         webhook.getApi().getGatewayContext().getScheduledExecutorService().execute(new WebhookRunnable(store));
     }
 
+    // Uses `this` directly (store name "webhook"), same as execute() above - see there for why. A
+    // WebhookAction-created key's recheck therefore doesn't see whatever custom variables (or even
+    // {{var::handler.xxx}} for the fixed fields) its owning function's action originally supplied;
+    // that's fine since this only fires for a key that already has a ttl configured, which is the
+    // checkOnStart case check/add are written for.
     public void schedule() {
         if (isExists()) {
             if (getTTLMs() != null) {

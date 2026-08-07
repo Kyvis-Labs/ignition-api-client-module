@@ -299,7 +299,7 @@ public class Variables implements YamlParser, VariableStore {
                 ));
             }
 
-            return new APIResource(current.enabled(), current.configuration(), new ArrayList<>(merged.values()), current.certificate(), current.webhookKeys());
+            return new APIResource(current.enabled(), current.configuration(), new ArrayList<>(merged.values()), current.certificate());
         });
     }
 
